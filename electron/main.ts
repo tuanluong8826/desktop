@@ -6,7 +6,7 @@ import dns from "node:dns";
 import net from "node:net";
 import tls from "node:tls";
 import https from "node:https";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   signCoverUrl,
@@ -1012,6 +1012,64 @@ if (!gotTheLock) {
         sha256: activeState?.sha256 || null,
         effectivePath: bundleManager ? bundleManager.getEffectiveIndexPath() : RENDERER_DIST,
       };
+    });
+
+    ipcMain.handle("audio:resolve-stream", async (_event, trackId: string) => {
+      if (!trackId || typeof trackId !== "string") return null;
+      const userBin = path.join(app.getPath("userData"), "bin", "yt-dlp");
+      let binary = "yt-dlp";
+      if (fs.existsSync(userBin)) {
+        binary = userBin;
+      } else if (fs.existsSync("/tmp/yt-dlp")) {
+        try {
+          const dir = path.dirname(userBin);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.copyFileSync("/tmp/yt-dlp", userBin);
+          fs.chmodSync(userBin, 0o755);
+          binary = userBin;
+        } catch {
+          binary = "/tmp/yt-dlp";
+        }
+      }
+
+      return new Promise<{ streamUrl: string; mimeType: string; codec: string } | null>((resolve) => {
+        try {
+          const proc = spawn(binary, [
+            "--no-playlist",
+            "-f", "140/ba/bestaudio",
+            "-g",
+            `https://www.youtube.com/watch?v=${trackId}`
+          ]);
+          let stdout = "";
+          const timer = setTimeout(() => {
+            try { proc.kill("SIGKILL"); } catch {}
+            resolve(null);
+          }, 8000);
+
+          proc.stdout.on("data", (data) => {
+            stdout += data.toString();
+          });
+          proc.on("close", (code) => {
+            clearTimeout(timer);
+            const url = stdout.trim().split("\n")[0];
+            if (code === 0 && url && url.startsWith("http")) {
+              resolve({
+                streamUrl: url,
+                mimeType: "audio/mp4",
+                codec: "aac"
+              });
+            } else {
+              resolve(null);
+            }
+          });
+          proc.on("error", () => {
+            clearTimeout(timer);
+            resolve(null);
+          });
+        } catch {
+          resolve(null);
+        }
+      });
     });
 
     // automatic update check after window initialization (packaged app only)

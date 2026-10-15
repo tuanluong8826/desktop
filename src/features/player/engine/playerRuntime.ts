@@ -411,14 +411,32 @@ export class PlayerRuntime {
 
     const promise = (async () => {
       try {
-        const session = await api.createPlaybackSession(
-          track.id,
-          undefined,
-          controller.signal,
-        );
-        if (controller.signal.aborted) return;
+        let streamUrl: string | null = null;
+        let mimeType = "audio/webm";
 
-        const url = mediaUrl(session.streamUrl);
+        const nativeElectron = (typeof window !== "undefined" && (window as any).linerElectron);
+        if (nativeElectron?.resolveStream) {
+          try {
+            const nativeRes = await nativeElectron.resolveStream(track.id);
+            if (nativeRes?.streamUrl) {
+              streamUrl = nativeRes.streamUrl;
+              mimeType = nativeRes.mimeType || "audio/mp4";
+            }
+          } catch {}
+        }
+
+        if (!streamUrl) {
+          const session = await api.createPlaybackSession(
+            track.id,
+            undefined,
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          streamUrl = mediaUrl(session.streamUrl);
+          mimeType = session.mimeType || "audio/webm";
+        }
+
+        const url = streamUrl;
         const response = await fetch(url, {
           headers: { Range: "bytes=0-" },
           signal: controller.signal,
@@ -429,12 +447,12 @@ export class PlayerRuntime {
         const arrayBuffer = await response.arrayBuffer();
         if (controller.signal.aborted) return;
 
-        const mimeType =
-          session.mimeType ||
+        const finalMime =
+          mimeType ||
           response.headers.get("content-type") ||
           "audio/webm";
-        const blob = new Blob([arrayBuffer], { type: mimeType });
-        await linerDb.putAudio(track.id, blob, mimeType);
+        const blob = new Blob([arrayBuffer], { type: finalMime });
+        await linerDb.putAudio(track.id, blob, finalMime);
         await linerDb.putTrack(track);
         log(
           "green",
@@ -582,22 +600,49 @@ export class PlayerRuntime {
         return;
       }
 
-      const session = await api.createPlaybackSession(
-        track.id,
-        undefined,
-        controller.signal,
-      );
-      this.ttfbMs = Math.round(performance.now() - this.loadStartTime);
+      let resolvedUrl: string | null = null;
+      let sessionMime = "audio/webm";
+      let sessionCodec = "opus";
+      let sessionBitrate = 160000;
 
-      if (epoch !== this.loadEpoch || controller.signal.aborted) {
-        log("yellow", "playback", `superseded before stream ready (${track.title})`);
-        return;
+      const nativeElectron = (typeof window !== "undefined" && (window as any).linerElectron);
+      if (nativeElectron?.resolveStream) {
+        try {
+          const nativeRes = await Promise.race([
+            nativeElectron.resolveStream(track.id),
+            new Promise<null>((r) => setTimeout(() => r(null), 4000))
+          ]);
+          if (nativeRes?.streamUrl) {
+            resolvedUrl = nativeRes.streamUrl;
+            sessionMime = nativeRes.mimeType || "audio/mp4";
+            sessionCodec = nativeRes.codec || "aac";
+            sessionBitrate = 128000;
+          }
+        } catch {}
       }
 
-      const expiry = session.expiresAt ? new Date(session.expiresAt).getTime() : null;
-      this.currentSessionExpiresAt = Number.isFinite(expiry) ? expiry : null;
+      if (!resolvedUrl) {
+        const session = await api.createPlaybackSession(
+          track.id,
+          undefined,
+          controller.signal,
+        );
+        this.ttfbMs = Math.round(performance.now() - this.loadStartTime);
 
-      const url = mediaUrl(session.streamUrl);
+        if (epoch !== this.loadEpoch || controller.signal.aborted) {
+          log("yellow", "playback", `superseded before stream ready (${track.title})`);
+          return;
+        }
+
+        const expiry = session.expiresAt ? new Date(session.expiresAt).getTime() : null;
+        this.currentSessionExpiresAt = Number.isFinite(expiry) ? expiry : null;
+        resolvedUrl = mediaUrl(session.streamUrl);
+        sessionMime = session.mimeType || "audio/webm";
+        sessionCodec = session.codec || "opus";
+        sessionBitrate = session.bitrate || 160000;
+      }
+
+      const url = resolvedUrl;
       if (this.activeBlobUrl) {
         URL.revokeObjectURL(this.activeBlobUrl);
         this.activeBlobUrl = null;
@@ -615,22 +660,34 @@ export class PlayerRuntime {
       log(
         "green",
         "playback",
-        `stream attached: ${session.codec} ${session.bitrate} bps (${track.title})`,
+        `stream attached: ${sessionCodec} ${sessionBitrate} bps (${track.title})`,
       );
 
-      this.cacheAudioInBackground(track, url, session.mimeType, bgCacheController.signal);
+      this.cacheAudioInBackground(track, url, sessionMime, bgCacheController.signal);
 
       if (this.audio.readyState < 3) {
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, import.meta.env.TEST ? 50 : 25000);
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (this.audio.readyState < 2) {
+              reject(new Error("Playback buffer timeout"));
+            } else {
+              resolve();
+            }
+          }, import.meta.env.TEST ? 50 : 8000);
           const onCanPlay = () => {
             clearTimeout(timeout);
             this.audio.removeEventListener("canplay", onCanPlay);
-            this.audio.removeEventListener("error", onCanPlay);
+            this.audio.removeEventListener("error", onError);
             resolve();
           };
+          const onError = () => {
+            clearTimeout(timeout);
+            this.audio.removeEventListener("canplay", onCanPlay);
+            this.audio.removeEventListener("error", onError);
+            reject(new Error("Audio load failed"));
+          };
           this.audio.addEventListener("canplay", onCanPlay, { once: true });
-          this.audio.addEventListener("error", onCanPlay, { once: true });
+          this.audio.addEventListener("error", onError, { once: true });
         });
       }
 
@@ -656,8 +713,8 @@ export class PlayerRuntime {
 
       telemetry.trackPlaybackHealth("INIT_LATENCY", {
         trackId: track.id,
-        codec: session.codec,
-        bitrate: session.bitrate,
+        codec: sessionCodec as any,
+        bitrate: sessionBitrate,
         timeToFirstByteMs: this.ttfbMs,
         audioStartLatencyMs,
       });
