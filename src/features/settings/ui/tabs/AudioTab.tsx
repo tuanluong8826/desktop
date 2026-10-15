@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { FolderOpenLine } from "@mingcute/react";
-import { useToast } from "@/shared/ui";
+import { useToast, ToggleSwitch } from "@/shared/ui";
 import Button from "@/shared/ui/Button";
 import { useTranslation } from "@/languages";
-import { usePlayerStore, type AudioQuality } from "@/features/player";
+import {
+  usePlayerStore,
+  type AudioQuality,
+  audioEnhancer,
+  EQ_BANDS,
+  EQ_PRESETS,
+  type EqPresetName,
+} from "@/features/player";
 import { Select } from "@/shared/ui";
 import { useConnectivityStore } from "@/features/connectivity";
-import { SettingRow, SettingSection } from "../controls";
+import { SettingRow, SettingSection, SettingBlock } from "../controls";
 
 export function AudioTab({ searchQuery }: { searchQuery?: string }) {
   const { t } = useTranslation();
@@ -20,9 +27,50 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
   const connLastRunAt = useConnectivityStore((s) => s.lastRunAt);
   const runAndSaveDump = useConnectivityStore((s) => s.runAndSaveDump);
 
+  // Audio Enhancer states
+  const [eqEnabled, setEqEnabled] = useState(true);
+  const [selectedPreset, setSelectedPreset] = useState<EqPresetName>("flat");
+  const [eqGains, setEqGains] = useState<number[]>([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const [bassBoost, setBassBoost] = useState<number>(0);
+  const [compressorEnabled, setCompressorEnabled] = useState(true);
+
   useEffect(() => {
     setMounted(true);
+    const cfg = audioEnhancer.getConfig();
+    setEqEnabled(cfg.eqEnabled);
+    setEqGains([...cfg.eqGains]);
+    setBassBoost(cfg.bassBoostLevel);
+    setCompressorEnabled(cfg.compressorEnabled);
   }, []);
+
+  const handlePresetChange = (presetKey: string) => {
+    const key = presetKey as EqPresetName;
+    setSelectedPreset(key);
+    audioEnhancer.applyPreset(key);
+    setEqGains([...audioEnhancer.getConfig().eqGains]);
+  };
+
+  const handleBandGainChange = (index: number, gain: number) => {
+    audioEnhancer.setEqBandGain(index, gain);
+    const updated = [...eqGains];
+    updated[index] = gain;
+    setEqGains(updated);
+  };
+
+  const handleBassBoostChange = (level: number) => {
+    setBassBoost(level);
+    audioEnhancer.setBassBoost(level);
+  };
+
+  const handleToggleEq = (enabled: boolean) => {
+    setEqEnabled(enabled);
+    audioEnhancer.toggleEq(enabled);
+  };
+
+  const handleToggleCompressor = (enabled: boolean) => {
+    setCompressorEnabled(enabled);
+    audioEnhancer.toggleCompressor(enabled);
+  };
 
   // lossless is listed as unavailable, so the picker only offers live tiers
   const quality: Exclude<AudioQuality, "lossless"> =
@@ -30,7 +78,7 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
 
   return (
     <div className="flex flex-col gap-[16px]">
-      <SettingSection>
+      <SettingSection label="Chất Lượng Âm Thanh">
         <SettingRow
           title={t("settings.audio.title")}
           description={t("settings.audio.description")}
@@ -57,6 +105,108 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
         />
       </SettingSection>
 
+      <SettingSection label="Nâng Cấp Âm Thanh Chuyên Nghiệp (Audio DSP)">
+        <SettingRow
+          title="Bộ Cân Bằng Âm Thanh (10-Band Equalizer)"
+          description="Tinh chỉnh chi tiết 10 dải tần số âm thanh từ Sub-bass 32Hz đến Dải cao 16kHz"
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={eqEnabled}
+              onChange={handleToggleEq}
+              ariaLabel="Bật tắt Equalizer"
+            />
+          }
+        />
+
+        {eqEnabled && (
+          <SettingBlock
+            title="Cấu Hình Âm Sắc (EQ Preset)"
+            description="Chọn nhanh các cấu hình âm thanh chuẩn phòng thu"
+            searchQuery={searchQuery}
+          >
+            <div className="flex flex-col gap-[14px]">
+              <div className="w-[240px]">
+                <Select
+                  value={selectedPreset}
+                  onChange={handlePresetChange}
+                  options={Object.entries(EQ_PRESETS).map(([k, v]) => ({
+                    value: k,
+                    label: v.name,
+                  }))}
+                />
+              </div>
+
+              {/* 10-Band Interactive Sliders */}
+              <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 p-3 rounded-xl bg-background-secondary border border-border-primary">
+                {EQ_BANDS.map((band, idx) => {
+                  const gain = eqGains[idx] ?? 0;
+                  return (
+                    <div
+                      key={band.label}
+                      className="flex flex-col items-center gap-1.5 min-w-0"
+                    >
+                      <span className="text-[10px] text-text-tertiary font-mono">
+                        {gain > 0 ? `+${gain}` : gain}dB
+                      </span>
+                      <input
+                        type="range"
+                        min="-12"
+                        max="12"
+                        step="1"
+                        value={gain}
+                        onChange={(e) =>
+                          handleBandGainChange(idx, Number(e.target.value))
+                        }
+                        className="w-full h-20 accent-accent cursor-pointer [writing-mode:vertical-lr] [direction:rtl]"
+                      />
+                      <span className="text-[11px] font-medium text-text-secondary truncate">
+                        {band.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </SettingBlock>
+        )}
+
+        <SettingRow
+          title="Tăng Cường Âm Trầm (Deep Sub-Bass Boost)"
+          description="Khuếch đại dải siêu trầm (dưới 80Hz) cho âm bass sâu, chắc và có lực hơn"
+          searchQuery={searchQuery}
+          control={
+            <div className="flex items-center gap-3 w-[200px]">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={bassBoost}
+                onChange={(e) => handleBassBoostChange(Number(e.target.value))}
+                className="w-full accent-accent cursor-pointer"
+              />
+              <span className="text-xs font-mono text-text-secondary min-w-[36px]">
+                {Math.round(bassBoost * 100)}%
+              </span>
+            </div>
+          }
+        />
+
+        <SettingRow
+          title="Bộ Nén Động Học & Chống Vỡ Tiếng (Studio Limiter)"
+          description="Tự động nén dải động, bảo vệ loa và tai nghe khỏi hiện tượng méo tiếng khi tăng âm lượng"
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={compressorEnabled}
+              onChange={handleToggleCompressor}
+              ariaLabel="Bật tắt Studio Limiter"
+            />
+          }
+        />
+      </SettingSection>
+
       <SettingSection label={t("settings.connection.title")}>
         <SettingRow
           title={t("settings.connection.checks_title")}
@@ -78,7 +228,9 @@ export function AudioTab({ searchQuery }: { searchQuery?: string }) {
                   variant="secondary"
                   type="button"
                   onClick={async () => {
-                    const targetPath = useConnectivityStore.getState().lastSavedDumpPath || undefined;
+                    const targetPath =
+                      useConnectivityStore.getState().lastSavedDumpPath ||
+                      undefined;
                     if (window.linerElectron?.openExportFolder) {
                       await window.linerElectron.openExportFolder(targetPath);
                     } else if (window.linerElectron?.openDownloads) {

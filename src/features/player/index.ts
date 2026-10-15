@@ -31,3 +31,4 @@ export {
 } from "./ui/SongCardWithMenu";
 export { VolumePicker, type VolumePickerProps } from "./ui/VolumePicker";
 export { SpeedPitchPicker, type SpeedPitchPickerProps } from "./ui/SpeedPitchPicker";
+export { audioEnhancer, EQ_BANDS, EQ_PRESETS, type EqPresetName } from "./engine/audioEnhancer";

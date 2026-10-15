@@ -15,6 +15,8 @@
  * Perfectly tuned for the authentic "Slowed + Reverb" aesthetic.
  */
 
+import { audioEnhancer } from "./audioEnhancer";
+
 const GRAIN_PERIOD = 0.038; // 38ms grain window
 const NUM_TAPS = 4;
 
@@ -367,7 +369,9 @@ export class PitchShifterController {
         reverbHighpass.connect(reverbWetGain);
         reverbWetGain.connect(masterOutputGain);
 
-        masterOutputGain.connect(ctx.destination);
+        const { input: enhancerIn, output: enhancerOut } = audioEnhancer.init(ctx);
+        masterOutputGain.connect(enhancerIn);
+        enhancerOut.connect(ctx.destination);
 
         graph = {
           ctx,
