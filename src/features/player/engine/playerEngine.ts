@@ -1025,10 +1025,13 @@ class PlayerEngine {
     }
 
     const isPaused = state.status === "paused";
+    const artistName = currentTrack.artists || (currentTrack as any).artist || "Unknown Artist";
+    const albumName = typeof currentTrack.album === "object" ? currentTrack.album?.title : (currentTrack.album || undefined);
+
     const activity = {
       title: currentTrack.title || "Unknown Title",
-      artist: currentTrack.artist || "Unknown Artist",
-      album: currentTrack.album || undefined,
+      artist: artistName,
+      album: albumName,
       coverUrl: currentTrack.coverUrl || undefined,
       durationMs: state.durationMs || currentTrack.durationMs || 0,
       positionMs: state.positionMs || 0,
