@@ -131,6 +131,20 @@ export function refreshAuthSession(): Promise<AuthTokens | null> {
           },
           body,
         });
+
+        if (response.status >= 500 && response.status <= 504 && switchToFallbackEdge()) {
+          try {
+            signedHeaders = await signApiRequest("POST", "/v1/auth/refresh", body);
+            response = await fetch(`${getApiBaseUrl()}/v1/auth/refresh`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...signedHeaders,
+              },
+              body,
+            });
+          } catch {}
+        }
       } catch (networkErr) {
         if (switchToFallbackEdge()) {
           try {
@@ -144,20 +158,8 @@ export function refreshAuthSession(): Promise<AuthTokens | null> {
               body,
             });
           } catch (fallbackErr) {
-            switchToPrimaryApi();
             throw fallbackErr;
           }
-        } else if (getApiBaseUrl() !== DEFAULT_PRIMARY_API) {
-          switchToPrimaryApi();
-          signedHeaders = await signApiRequest("POST", "/v1/auth/refresh", body);
-          response = await fetch(`${getApiBaseUrl()}/v1/auth/refresh`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...signedHeaders,
-            },
-            body,
-          });
         } else {
           throw networkErr;
         }

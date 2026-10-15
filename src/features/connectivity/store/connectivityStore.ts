@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { DIAG_ENDPOINTS, runAllChecks, type DiagnosticsResult } from "../lib/diagnostics";
 import { isPlaybackPath } from "../lib/failureKind";
 import { buildOfflineDump, downloadDump, type SaveDumpResult } from "../lib/dump";
-import { DEFAULT_PRIMARY_API, setApiBaseUrl } from "@/shared/api/baseUrl";
+import { DEFAULT_PRIMARY_API, FALLBACK_EDGE_API, setApiBaseUrl, switchToFallbackEdge } from "@/shared/api/baseUrl";
 
 export const TRIP_COUNT = 3;
 export const TRIP_WINDOW_MS = 60_000;
@@ -29,6 +29,7 @@ interface ConnectivityState {
   recordFailure: (entry: Omit<FailureEntry, "at">) => void;
   runDiagnostics: () => Promise<void>;
   retry: () => Promise<void>;
+  switchToFallback: () => void;
   runAndSaveDump: () => Promise<SaveDumpResult>;
   reset: () => void;
 }
@@ -75,9 +76,22 @@ export const useConnectivityStore = create<ConnectivityState>((set, get) => ({
     await get().runDiagnostics();
     const apiOk = get().checks.some((c) => c.id === "api" && c.status === "ok");
     if (apiOk) {
-      setApiBaseUrl(DEFAULT_PRIMARY_API);
       set({ tripped: false, visible: false, failures: [] });
+      return;
     }
+    // If primary failed, test fallback edge
+    try {
+      const res = await fetch(`${FALLBACK_EDGE_API}/health`);
+      if (res.ok) {
+        switchToFallbackEdge();
+        set({ tripped: false, visible: false, failures: [] });
+      }
+    } catch {}
+  },
+
+  switchToFallback: () => {
+    switchToFallbackEdge();
+    set({ tripped: false, visible: false, failures: [] });
   },
 
   // manual trigger from settings: runs every probe and saves the dump file

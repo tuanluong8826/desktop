@@ -1,11 +1,7 @@
 import type { MainNetResult } from "../../../../electron/netdiag";
 import { SHARE_BASE_URL } from "@/shared/utils/share";
+import { getApiBaseUrl } from "@/shared/api/baseUrl";
 
-// endpoint bases duplicated here on purpose: importing @/shared/api would
-// close an import cycle (api hooks record failures into this feature).
-const API_BASE =
-  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, "") ||
-  "https://api.tryliner.fun";
 const COVERS_BASE =
   (import.meta.env.VITE_COVERS_PROXY_URL as string | undefined)?.replace(/\/+$/, "") ||
   "https://covers.tryliner.fun";
@@ -14,7 +10,9 @@ const CHECK_TIMEOUT_MS = 8000;
 
 // real origins probed, reused for the dump file metadata
 export const DIAG_ENDPOINTS = {
-  api: API_BASE,
+  get api() {
+    return getApiBaseUrl();
+  },
   covers: COVERS_BASE,
   link: SHARE_BASE_URL,
 };
@@ -75,7 +73,7 @@ export async function runAllChecks(): Promise<DiagnosticsResult> {
       : { id: "device", status: "fail", detail: "os reports offline" },
   );
 
-  checks.push(await timedFetch(`${API_BASE}/health`));
+  checks.push(await timedFetch(`${getApiBaseUrl()}/health`));
 
   const ping = async (id: DiagCheck["id"], url: string): Promise<DiagCheck> => {
     const controller = new AbortController();

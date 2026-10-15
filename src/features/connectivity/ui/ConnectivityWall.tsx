@@ -32,6 +32,7 @@ export default function ConnectivityWall() {
   const lastRunAt = useConnectivityStore((s) => s.lastRunAt);
   const retry = useConnectivityStore((s) => s.retry);
   const reset = useConnectivityStore((s) => s.reset);
+  const switchToFallback = useConnectivityStore((s) => s.switchToFallback);
   const runDiagnostics = useConnectivityStore((s) => s.runDiagnostics);
 
   const dump = useMemo(
@@ -187,6 +188,16 @@ export default function ConnectivityWall() {
             className="!h-[38px] px-[20px] !text-[13px]"
           >
             {running ? t("connectivity.retrying") : t("connectivity.retry")}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              switchToFallback();
+              toast("Đã chuyển sang máy chủ dự phòng (Edge Relay)", "info");
+            }}
+            className="!h-[38px] px-[16px] !text-[13px] text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/10"
+          >
+            Dùng Server Dự phòng (Edge)
           </Button>
           <Button
             variant="outline"

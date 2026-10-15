@@ -72,4 +72,17 @@ describe("baseUrl endpoint manager & probe", () => {
     expect(getApiBaseUrl()).toBe(DEFAULT_PRIMARY_API);
     expect(storageMap.get("liner_active_api_base")).toBe(DEFAULT_PRIMARY_API);
   });
+
+  it("does not overwrite custom server during health probe", async () => {
+    resetEndpointProbe();
+    const customUrl = "http://localhost:3000";
+    setApiBaseUrl(customUrl);
+    expect(getApiBaseUrl()).toBe(customUrl);
+
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const endpoint = await initApiEndpointProbe(500);
+    expect(endpoint).toBe(customUrl);
+    expect(getApiBaseUrl()).toBe(customUrl);
+  });
 });
+

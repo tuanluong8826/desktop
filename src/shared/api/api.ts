@@ -40,7 +40,7 @@ function translate(key: string, vars?: Record<string, string | number>) {
   }
 }
 
-import { DEFAULT_PRIMARY_API, getApiBaseUrl, switchToFallbackEdge, switchToPrimaryApi } from "./baseUrl";
+import { DEFAULT_PRIMARY_API, getApiBaseUrl, switchToFallbackEdge, switchToPrimaryApi, getProbePromise } from "./baseUrl";
 
 const CLIENT_VERSION =
   (import.meta.env.VITE_CLIENT_VERSION as string | undefined) || "1.0.4-desktop";
@@ -178,6 +178,13 @@ async function executeRequest<T>(
   allowRefresh = true,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<T> {
+  const probe = getProbePromise();
+  if (probe) {
+    try {
+      await Promise.race([probe, new Promise((resolve) => setTimeout(resolve, 800))]);
+    } catch {}
+  }
+
   const startTime = performance.now();
   const method = (init?.method ?? "GET").toUpperCase();
   const rawBody = typeof init?.body === "string" ? init.body : null;
@@ -239,6 +246,39 @@ async function executeRequest<T>(
       },
       timeoutMs,
     );
+
+    // Failover if primary returns 500-504 (e.g. Cloudflare 502 Bad Gateway)
+    if (res.status >= 500 && res.status <= 504 && switchToFallbackEdge()) {
+      try {
+        const fallbackSigned = await signApiRequest(method, path, rawBody);
+        res = await fetchWithTimeout(
+          getApiBaseUrl() + path,
+          {
+            ...init,
+            headers: {
+              ...(hasBody ? { "Content-Type": "application/json" } : {}),
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              ...correlationHeaders,
+              ...fallbackSigned,
+              ...restHeaders,
+            },
+          },
+          timeoutMs,
+        );
+      } catch (fallbackErr) {
+        const durationMs = Math.round(performance.now() - startTime);
+        telemetry.trackNetwork(method, path, 0, durationMs, requestId);
+        if (isConnectivityFailure(fallbackErr) && !isPlaybackPath(path)) {
+          recordConnectivityFailure({
+            method,
+            path: stripQuery(path),
+            status: statusOf(fallbackErr),
+            latencyMs: durationMs,
+          });
+        }
+        throw fallbackErr;
+      }
+    }
   } catch (err: any) {
     if (init?.signal?.aborted || err?.name === "AbortError") {
       throw err;
@@ -261,7 +301,6 @@ async function executeRequest<T>(
           timeoutMs,
         );
       } catch (fallbackErr) {
-        switchToPrimaryApi();
         const durationMs = Math.round(performance.now() - startTime);
         telemetry.trackNetwork(method, path, 0, durationMs, requestId);
         if (isConnectivityFailure(fallbackErr) && !isPlaybackPath(path)) {
@@ -273,37 +312,6 @@ async function executeRequest<T>(
           });
         }
         throw fallbackErr;
-      }
-    } else if (getApiBaseUrl() !== DEFAULT_PRIMARY_API) {
-      switchToPrimaryApi();
-      try {
-        const primarySigned = await signApiRequest(method, path, rawBody);
-        res = await fetchWithTimeout(
-          getApiBaseUrl() + path,
-          {
-            ...init,
-            headers: {
-              ...(hasBody ? { "Content-Type": "application/json" } : {}),
-              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-              ...correlationHeaders,
-              ...primarySigned,
-              ...restHeaders,
-            },
-          },
-          timeoutMs,
-        );
-      } catch (primaryErr) {
-        const durationMs = Math.round(performance.now() - startTime);
-        telemetry.trackNetwork(method, path, 0, durationMs, requestId);
-        if (isConnectivityFailure(primaryErr) && !isPlaybackPath(path)) {
-          recordConnectivityFailure({
-            method,
-            path: stripQuery(path),
-            status: statusOf(primaryErr),
-            latencyMs: durationMs,
-          });
-        }
-        throw primaryErr;
       }
     } else {
       const durationMs = Math.round(performance.now() - startTime);
