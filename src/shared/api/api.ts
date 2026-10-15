@@ -428,7 +428,7 @@ async function executeRequest<T>(
         ? body.requestId
         : undefined);
 
-    if (res.status >= 500) {
+    if (res.status >= 500 && !isPlaybackPath(path)) {
       showToast(translate("common.error_server_title"), "error", {
         id: `server-error-${res.status}`,
         description: translate("common.error_server"),
@@ -728,7 +728,7 @@ export const api = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(options),
         },
-      );
+      ).catch(() => ({ items: [] }));
     }
     const params = new URLSearchParams();
     if (options?.k) params.set("k", String(options.k));
@@ -738,7 +738,7 @@ export const api = {
     const qs = params.toString();
     return request<RadioResponse>(
       `/v1/tracks/${encodeURIComponent(id)}/radio${qs ? `?${qs}` : ""}`,
-    );
+    ).catch(() => ({ items: [] }));
   },
 
   getAlbum(id: string): Promise<ApiAlbumDetails> {
@@ -984,24 +984,44 @@ export const api = {
           },
         },
       );
+
+      if (res.status >= 500 && res.status <= 504 && switchToFallbackEdge()) {
+        try {
+          const fallbackSigned = await signApiRequest("GET", path);
+          res = await fetch(
+            `${getApiBaseUrl()}${path}`,
+            {
+              signal,
+              headers: {
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                ...correlationHeaders,
+                ...fallbackSigned,
+              },
+            },
+          );
+        } catch {}
+      }
     } catch (fetchErr: any) {
       if (signal?.aborted || fetchErr?.name === "AbortError") {
         throw fetchErr;
       }
-      if (getApiBaseUrl() !== DEFAULT_PRIMARY_API) {
-        switchToPrimaryApi();
-        const primarySigned = await signApiRequest("GET", path);
-        res = await fetch(
-          `${getApiBaseUrl()}${path}`,
-          {
-            signal,
-            headers: {
-              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-              ...correlationHeaders,
-              ...primarySigned,
+      if (switchToFallbackEdge()) {
+        try {
+          const fallbackSigned = await signApiRequest("GET", path);
+          res = await fetch(
+            `${getApiBaseUrl()}${path}`,
+            {
+              signal,
+              headers: {
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                ...correlationHeaders,
+                ...fallbackSigned,
+              },
             },
-          },
-        );
+          );
+        } catch {
+          throw fetchErr;
+        }
       } else {
         throw fetchErr;
       }

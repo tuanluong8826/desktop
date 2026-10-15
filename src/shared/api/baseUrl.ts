@@ -31,7 +31,7 @@ function loadStoredBaseUrl(): string {
       }
     } catch {}
   }
-  return DEFAULT_PRIMARY_API;
+  return FALLBACK_EDGE_API;
 }
 
 function persistBaseUrl(url: string): void {
