@@ -51,7 +51,7 @@ export class BundleManager {
     this.updaterUrl =
       options.updaterUrl ||
       process.env.LINER_UPDATER_URL ||
-      "https://updates.tryliner.fun";
+      "";
 
     this.publicKeyHex =
       options.publicKeyHex ||
@@ -84,17 +84,21 @@ export class BundleManager {
         const parsed = JSON.parse(raw) as ActiveBundleState;
         const indexHtml = path.join(parsed.bundleDir, "dist", "index.html");
 
-        // Validate bundle exists on disk and is compatible with current appVersion
+        // Validate bundle exists on disk, is not older than current app, and is compatible
         if (
           fs.existsSync(indexHtml) &&
+          this.compareVersions(parsed.bundleVersion, app.getVersion()) >= 0 &&
           this.isVersionCompatible(app.getVersion(), parsed.minAppVersion)
         ) {
           this.activeState = parsed;
           return;
         } else {
           console.warn(
-            `\x1b[33m[BundleManager]\x1b[0m Cached bundle ${parsed.bundleVersion} is invalid or incompatible, reverting to built-in dist.`
+            `\x1b[33m[BundleManager]\x1b[0m Cached bundle ${parsed.bundleVersion} is invalid, older than app (${app.getVersion()}), or incompatible. Reverting to built-in dist.`
           );
+          try {
+            fs.unlinkSync(this.stateFilePath);
+          } catch {}
         }
       }
     } catch (err) {
@@ -142,6 +146,18 @@ export class BundleManager {
     return true;
   }
 
+  public compareVersions(v1: string, v2: string): number {
+    const p1 = (v1 || "0").split("-")[0].split(".").map(Number);
+    const p2 = (v2 || "0").split("-")[0].split(".").map(Number);
+    for (let i = 0; i < 3; i++) {
+      const a = p1[i] || 0;
+      const b = p2[i] || 0;
+      if (a > b) return 1;
+      if (a < b) return -1;
+    }
+    return 0;
+  }
+
   /**
    * Queries /updates/manifest.json for a new bundle
    */
@@ -150,6 +166,7 @@ export class BundleManager {
     manifest?: BundleManifest;
     reason?: string;
   }> {
+    if (!this.updaterUrl) return { available: false, reason: "OTA updates disabled" };
     if (this.isChecking) return { available: false, reason: "Already checking" };
     this.isChecking = true;
 
