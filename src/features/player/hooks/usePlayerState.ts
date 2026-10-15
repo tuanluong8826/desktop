@@ -23,6 +23,7 @@ const EMPTY_STATE: PlayerState = {
   trackDoubleClickBehavior: "play",
   defaultPlaybackContext: "resume",
   fullscreen: false,
+  showLyrics: false,
   playbackRate: 1,
   pitchSemitones: 0,
   isPitchLinked: true,

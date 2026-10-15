@@ -24,6 +24,9 @@ import "@braccato/core/styles/lyrics.css";
 import "@braccato/core/styles/instrumental.css";
 import KawarpWrapper from "./KawarpWrapper";
 import { useTranslation } from "@/languages";
+import { usePlayerStore } from "../store/playerStore";
+import Tooltip from "@/shared/ui/Tooltip";
+import LyricsIcon from "@/shared/ui/LyricsIcon";
 
 const BRACCATO_TAG = "braccato-lyrics";
 
@@ -297,6 +300,8 @@ export function FullscreenPlayer({
 }: FullscreenPlayerProps) {
   const { t } = useTranslation();
   const player = usePlayerState();
+  const showLyrics = usePlayerStore((s) => s.showLyrics);
+  const toggleLyrics = usePlayerStore((s) => s.toggleLyrics);
   const coverUrl = player.currentTrack?.coverUrl;
   const kawarpSrc = useCoverSrc(coverUrl);
 
@@ -370,135 +375,152 @@ export function FullscreenPlayer({
       <div className="absolute inset-0 z-[1] bg-black/40" />
 
       <div className="absolute inset-0 z-10 flex">
-        <div className="flex-1 flex flex-col items-center justify-center gap-5">
-          <PlayerUiElements onClose={onClose} />
-        </div>
-
-        <div className="flex-1 h-full min-h-0 pl-2 pr-6 flex flex-col relative">
-          {showProviderIsland && (
-            <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
-              <LyricsProviderIsland />
-            </div>
-          )}
-
-          <div
-            className="flex-1 min-h-0 relative w-full h-full"
-            style={{
-              display: hasLyrics ? "flex" : "none",
-            }}
-          >
-            <AnimatePresence initial={false}>
-              {hasLyrics && (
-                <motion.div
-                  key={`lyrics-${currentTrackId}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0, pointerEvents: "none" }}
-                  transition={{ duration: 0.22, ease: "easeInOut" }}
-                  className="absolute inset-0 flex flex-col"
-                >
-                  <BraccatoLyricsView lyrics={braccatoLyrics} />
-                </motion.div>
-              )}
-            </AnimatePresence>
+        <div
+          className={`h-full flex flex-col items-center justify-center transition-all duration-300 ease-out ${
+            showLyrics ? "flex-1" : "w-full"
+          }`}
+        >
+          <div className="flex flex-col items-center justify-center gap-5">
+            <PlayerUiElements
+              onClose={onClose}
+              showLyrics={showLyrics}
+              onToggleLyrics={toggleLyrics}
+              isCentered={!showLyrics}
+            />
           </div>
-
-          <AnimatePresence mode="wait">
-            {!hasLyrics && lyricsLoading ? (
-              <motion.div
-                key="skeleton"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex flex-col items-center justify-center"
-              >
-                <div className="flex flex-col gap-5 w-full max-w-[500px]">
-                  {[80, 65, 45, 70, 55, 85, 60, 50, 75, 40, 65, 55].map(
-                    (w, i) => (
-                      <div
-                        key={i}
-                        className="h-5 rounded animate-pulse bg-border-alpha-14"
-                        style={{ width: `${w}%` }}
-                      />
-                    ),
-                  )}
-                </div>
-              </motion.div>
-            ) : !hasLyrics && isInstrumental ? (
-              <motion.div
-                key="instrumental"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
-              >
-                <span>{t("player.instrumental")}</span>
-              </motion.div>
-            ) : hasPlainLyrics ? (
-              <motion.div
-                key={`plain-lyrics-${currentTrackId}`}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.22, ease: "easeInOut" }}
-                className="absolute inset-0 flex flex-col items-center justify-start overflow-y-auto px-6 py-16 scrollbar-none"
-              >
-                {activeProvider?.toLowerCase().includes("ai") ? (
-                  <div className="mb-6 px-3.5 py-1 rounded-full text-xs font-medium tracking-wide bg-white/10 text-white/80 border border-white/15 backdrop-blur-md">
-                    ✨ Lyric by AI
-                  </div>
-                ) : null}
-                <div
-                  className="flex flex-col gap-6 text-center max-w-[560px] w-full text-white/85 font-semibold text-[22px] leading-[1.6] select-text my-auto"
-                  style={{ fontFamily: "var(--font-inter), sans-serif", letterSpacing: "-0.015em" }}
-                >
-                  {plainLyrics!.split("\n").map((line, idx) => (
-                    <p key={idx} className={line.trim() ? "min-h-[1.5em]" : "h-5"}>
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              </motion.div>
-            ) : !hasLyrics ? (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute inset-0 flex items-center justify-center text-text-tertiary"
-              >
-                <div className="flex flex-col items-center justify-center gap-3 opacity-80">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="opacity-40"
-                  >
-                    <path d="M9 18V5l12-2v13"></path>
-                    <circle cx="6" cy="18" r="3"></circle>
-                    <circle cx="18" cy="16" r="3"></circle>
-                    <line x1="2" y1="2" x2="22" y2="22"></line>
-                  </svg>
-                  <span
-                    className="text-[15px] font-[400] max-w-[250px] text-center"
-                    style={{ lineHeight: "1.4" }}
-                  >
-                    {lyricsError || t("player.no_lyrics_found")}
-                  </span>
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
+
+        <AnimatePresence>
+          {showLyrics && (
+            <motion.div
+              key="fullscreen-lyrics-pane"
+              initial={{ opacity: 0, x: 25 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 25 }}
+              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 h-full min-h-0 pl-2 pr-6 flex flex-col relative"
+            >
+              {showProviderIsland && (
+                <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">
+                  <LyricsProviderIsland />
+                </div>
+              )}
+
+              <div
+                className="flex-1 min-h-0 relative w-full h-full"
+                style={{
+                  display: hasLyrics ? "flex" : "none",
+                }}
+              >
+                <AnimatePresence initial={false}>
+                  {hasLyrics && (
+                    <motion.div
+                      key={`lyrics-${currentTrackId}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, pointerEvents: "none" }}
+                      transition={{ duration: 0.22, ease: "easeInOut" }}
+                      className="absolute inset-0 flex flex-col"
+                    >
+                      <BraccatoLyricsView lyrics={braccatoLyrics} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {!hasLyrics && lyricsLoading ? (
+                  <motion.div
+                    key="skeleton"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex flex-col items-center justify-center"
+                  >
+                    <div className="flex flex-col gap-5 w-full max-w-[500px]">
+                      {[80, 65, 45, 70, 55, 85, 60, 50, 75, 40, 65, 55].map(
+                        (w, i) => (
+                          <div
+                            key={i}
+                            className="h-5 rounded animate-pulse bg-border-alpha-14"
+                            style={{ width: `${w}%` }}
+                          />
+                        ),
+                      )}
+                    </div>
+                  </motion.div>
+                ) : !hasLyrics && isInstrumental ? (
+                  <motion.div
+                    key="instrumental"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
+                  >
+                    <span>{t("player.instrumental")}</span>
+                  </motion.div>
+                ) : hasPlainLyrics ? (
+                  <motion.div
+                    key={`plain-lyrics-${currentTrackId}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.22, ease: "easeInOut" }}
+                    className="absolute inset-0 flex flex-col items-center justify-start overflow-y-auto px-6 py-16 scrollbar-none"
+                  >
+                    <div
+                      className="flex flex-col gap-6 text-center max-w-[560px] w-full text-white/85 font-semibold text-[22px] leading-[1.6] select-text my-auto"
+                      style={{ fontFamily: "var(--font-inter), sans-serif", letterSpacing: "-0.015em" }}
+                    >
+                      {plainLyrics!.split("\n").map((line, idx) => (
+                        <p key={idx} className={line.trim() ? "min-h-[1.5em]" : "h-5"}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : !hasLyrics ? (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute inset-0 flex items-center justify-center text-text-tertiary"
+                  >
+                    <div className="flex flex-col items-center justify-center gap-3 opacity-80">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-40"
+                      >
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                        <line x1="2" y1="2" x2="22" y2="22"></line>
+                      </svg>
+                      <span
+                        className="text-[15px] font-[400] max-w-[250px] text-center"
+                        style={{ lineHeight: "1.4" }}
+                      >
+                        {lyricsError || t("player.no_lyrics_found")}
+                      </span>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <button
@@ -511,6 +533,31 @@ export function FullscreenPlayer({
       >
         <DownLine size={18} />
       </button>
+
+      <Tooltip
+        content={
+          showLyrics
+            ? t("player.hide_lyrics") || "Ẩn lời bài hát"
+            : t("player.lyrics") || "Lời bài hát"
+        }
+        side="bottom"
+      >
+        <button
+          type="button"
+          aria-label={showLyrics ? "Hide lyrics" : "Show lyrics"}
+          title={showLyrics ? "Hide lyrics" : "Show lyrics"}
+          onClick={toggleLyrics}
+          data-no-window-drag
+          className={`absolute top-[12px] right-[12px] z-30 inline-flex h-[32px] px-3 items-center justify-center gap-1.5 rounded-lg border-none backdrop-blur-xl transition-all cursor-pointer select-none pointer-events-auto ${
+            showLyrics
+              ? "bg-white/20 text-white shadow-lg border border-white/20"
+              : "bg-black/50 text-white/70 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          <LyricsIcon size={16} />
+          <span className="text-xs font-medium">Lyrics</span>
+        </button>
+      </Tooltip>
     </div>
   );
 }

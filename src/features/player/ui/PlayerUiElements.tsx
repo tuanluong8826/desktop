@@ -21,6 +21,7 @@ import ExplicitBadge from "@/shared/ui/ExplicitBadge";
 import Tooltip from "@/shared/ui/Tooltip";
 import { VolumePicker } from "./VolumePicker";
 import { TimelineSlider } from "./TimelineSlider";
+import LyricsIcon from "@/shared/ui/LyricsIcon";
 
 import { useTranslation } from "@/languages";
 
@@ -46,11 +47,17 @@ function PlayPauseIcon({ status }: { status: string }) {
 interface PlayerUiElementsProps {
   onDuration?: (duration: number) => void;
   onClose?: () => void;
+  showLyrics?: boolean;
+  onToggleLyrics?: () => void;
+  isCentered?: boolean;
 }
 
 export function PlayerUiElements({
   onDuration: _onDuration,
   onClose,
+  showLyrics,
+  onToggleLyrics,
+  isCentered,
 }: PlayerUiElementsProps) {
   const player = usePlayerState();
 
@@ -83,11 +90,11 @@ export function PlayerUiElements({
 
   return (
     <>
-      {/* Artwork (Compact, flat, no drop shadows) */}
+      {/* Artwork (Scales smoothly when centered vs split with lyrics) */}
       <div
-        className={`relative shrink-0 overflow-hidden rounded-xl w-[280px] h-[280px] bg-black/20 ${
-          coverUrl && !isCoverLoaded ? "animate-pulse" : ""
-        }`}
+        className={`relative shrink-0 overflow-hidden transition-all duration-300 ease-out bg-black/20 ${
+          isCentered ? "w-[330px] h-[330px] rounded-2xl shadow-2xl" : "w-[280px] h-[280px] rounded-xl"
+        } ${coverUrl && !isCoverLoaded ? "animate-pulse" : ""}`}
       >
         <AnimatePresence>
           <motion.div
@@ -262,6 +269,35 @@ export function PlayerUiElements({
             <Repeat size={18} />
           )}
         </button>
+
+        {onToggleLyrics && (
+          <Tooltip
+            content={
+              showLyrics
+                ? t("player.hide_lyrics") || "Ẩn lời bài hát"
+                : t("player.lyrics") || "Lời bài hát"
+            }
+            side="top"
+          >
+            <button
+              type="button"
+              aria-label="Lyrics"
+              title={
+                showLyrics
+                  ? t("player.hide_lyrics") || "Ẩn lời bài hát"
+                  : t("player.lyrics") || "Lời bài hát"
+              }
+              onClick={onToggleLyrics}
+              className={`${iconButtonClass} ${
+                showLyrics
+                  ? "!text-white !opacity-100 bg-white/20 rounded-lg"
+                  : "!text-white/40 hover:!text-white"
+              }`}
+            >
+              <LyricsIcon size={18} />
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       {/* Volume (Compact smooth slider, size sm) */}

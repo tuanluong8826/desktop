@@ -57,6 +57,7 @@ export interface SessionState {
   trackDoubleClickBehavior: TrackDoubleClickBehavior;
   defaultPlaybackContext: DefaultPlaybackContext;
   fullscreen: boolean;
+  showLyrics: boolean;
   playbackRate: number;
   pitchSemitones: number;
   isPitchLinked: boolean;
@@ -112,6 +113,8 @@ export interface PlayerStore extends PlayerState {
   setTrackDoubleClickBehavior: (value: TrackDoubleClickBehavior) => void;
   setDefaultPlaybackContext: (value: DefaultPlaybackContext) => void;
   setFullscreen: (value: boolean) => void;
+  setShowLyrics: (value: boolean) => void;
+  toggleLyrics: () => void;
   setPlaybackRate: (rate: number) => void;
   setPitchSemitones: (semitones: number) => void;
   setIsPitchLinked: (linked: boolean) => void;
@@ -156,6 +159,7 @@ export const usePlayerStore = create<PlayerStore>()(
       trackDoubleClickBehavior: "play",
       defaultPlaybackContext: "resume",
       fullscreen: false,
+      showLyrics: false,
       playbackRate: 1,
       pitchSemitones: 0,
       isPitchLinked: true,
@@ -205,6 +209,8 @@ export const usePlayerStore = create<PlayerStore>()(
         if (get().fullscreen === fullscreen) return;
         set({ fullscreen });
       },
+      setShowLyrics: (showLyrics: boolean) => set({ showLyrics }),
+      toggleLyrics: () => set((state) => ({ showLyrics: !state.showLyrics })),
       setPlaybackRate: (playbackRate: number) => set({ playbackRate }),
       setPitchSemitones: (pitchSemitones: number) => set({ pitchSemitones }),
       setIsPitchLinked: (isPitchLinked: boolean) => set({ isPitchLinked }),
@@ -320,6 +326,7 @@ export const usePlayerStore = create<PlayerStore>()(
         isReverbEnabled: state.isReverbEnabled,
         reverbLevel: state.reverbLevel,
         discordRpcEnabled: state.discordRpcEnabled,
+        showLyrics: state.showLyrics,
       }),
     },
   ),

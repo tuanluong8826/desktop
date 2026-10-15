@@ -11,6 +11,7 @@ export {
   useCoverSrc,
   useCoverElement,
   clearCoverRegistry,
+  upgradeCoverUrl,
 } from "./lib/coverArt";
 export {
   prepareCoverFallback,

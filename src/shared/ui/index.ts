@@ -34,6 +34,7 @@ export {
 } from "./CircleDitherCanvas";
 export { default as UserAvatar, type UserAvatarProps } from "./UserAvatar";
 export { default as GrabberIcon } from "./GrabberIcon";
+export { default as LyricsIcon } from "./LyricsIcon";
 export { default as ReorderDropPlaceholder } from "./ReorderDropPlaceholder";
 export { default as FloatingDragCard } from "./FloatingDragCard";
 export { default as StickyHeader, type StickyHeaderProps } from "./StickyHeader";

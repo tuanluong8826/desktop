@@ -1,6 +1,6 @@
 import AppImage, { type ImageProps } from "./AppImage";
 import { useEffect, useState, useRef } from "react";
-import { markCoverReady, useCoverSrc } from "../lib/coverArt";
+import { markCoverReady, useCoverSrc, upgradeCoverUrl } from "../lib/coverArt";
 import { prepareCoverFallback } from "../lib/coverSigner";
 
 type CoverImageProps = Omit<ImageProps, "src" | "onError"> & {
@@ -9,11 +9,12 @@ type CoverImageProps = Omit<ImageProps, "src" | "onError"> & {
 
 // cover art renderer with automatic proxy fallback on direct cdn failure and self-healing retries
 export default function CoverImage({
-  src,
+  src: rawSrc,
   onLoad,
   crossOrigin = "anonymous",
   ...rest
 }: CoverImageProps) {
+  const src = upgradeCoverUrl(rawSrc) || rawSrc;
   const centralSrc = useCoverSrc(src);
   const [localFallback, setLocalFallback] = useState<string | undefined>(undefined);
   const [retryCount, setRetryCount] = useState(0);

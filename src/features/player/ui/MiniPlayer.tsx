@@ -20,6 +20,7 @@ import {
   PlaybackSpeed,
 } from "@solar-icons/react";
 import { HeartFill, HeartLine } from "@mingcute/react";
+import LyricsIcon from "@/shared/ui/LyricsIcon";
 
 import { usePlayerState } from "../hooks/usePlayerState";
 import { playerEngine } from "../engine/playerEngine";
@@ -841,6 +842,22 @@ function MiniPlayer({
                 ) : (
                   <VolumeLoud size={20} />
                 )}
+              </button>
+              <button
+                type="button"
+                aria-label={t("player.lyrics") || "Lyrics"}
+                title={t("player.lyrics") || "Lyrics"}
+                className={iconButtonClass}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setSpeedOpen(false);
+                  setVolumeOpen(false);
+                  usePlayerStore.getState().setShowLyrics(true);
+                  onFullscreenOpen?.();
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <LyricsIcon size={17} />
               </button>
               <button
                 type="button"

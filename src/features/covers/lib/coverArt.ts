@@ -16,6 +16,16 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { prepareCoverFallback } from "./coverSigner";
 
+export function upgradeCoverUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  if (url.includes("googleusercontent.com") || url.includes("ggpht.com")) {
+    return url
+      .replace(/=w\d+-h\d+[^?]*/, "=w1200-h1200-l90-rj")
+      .replace(/=s\d+[^?]*/, "=s1200-c");
+  }
+  return url;
+}
+
 type CoverStatus = "loading" | "loaded" | "error";
 
 interface CoverEntry {
