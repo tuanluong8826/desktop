@@ -1,6 +1,16 @@
 import express from "express";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
 import { Innertube, UniversalCache } from "youtubei.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CACHE_DIR = path.join(__dirname, "cache");
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,32 +43,48 @@ async function getYt() {
 }
 
 // 1. Health check
-app.get("/health", (req, res) => {
+app.get(["/health", "/v1/health"], (req, res) => {
   res.json({ status: "ok", server: "liner-selfhosted-oracle", version: "1.0.0" });
 });
+
+function formatTrack(item) {
+  const id = item.id || item.video_id;
+  if (!id) return null;
+  const title = typeof item.title === "string" ? item.title : (item.title?.text || item.title?.runs?.[0]?.text || "Track");
+  const thumbUrl = item.thumbnails?.[0]?.url || item.thumbnail?.contents?.[0]?.url || item.thumbnail?.[0]?.url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  const artists = (item.artists || []).map(a => ({
+    id: a.id || "artist",
+    name: typeof a.name === "string" ? a.name : (a.text || a.name?.text || "Artist")
+  }));
+  if (artists.length === 0 && (item.author || item.channel_id)) {
+    artists.push({ id: item.channel_id || "artist", name: typeof item.author === "string" ? item.author : (item.author?.name || "Artist") });
+  }
+  return {
+    type: "track",
+    id,
+    title,
+    artists: artists.length > 0 ? artists : [{ id: "artist", name: "Artist" }],
+    album: item.album ? { id: item.album.id || "album", title: item.album.name } : undefined,
+    durationMs: (item.duration?.seconds || (typeof item.duration === "number" ? item.duration : 180)) * 1000,
+    cover: {
+      url: thumbUrl,
+      width: 500,
+      height: 500
+    }
+  };
+}
 
 // 2. Explore / Popular (Trending music)
 app.get("/v1/explore/popular", async (req, res) => {
   try {
     const youtube = await getYt();
-    // Default to trending music charts
     const charts = await youtube.music.getExplore();
     const items = [];
 
-    // Parse trending tracks
     if (charts && charts.top_songs) {
       for (const item of charts.top_songs.contents || []) {
-        items.push({
-          id: item.id || item.video_id,
-          title: item.title,
-          artists: (item.artists || []).map(a => ({ id: a.id || "unknown", name: a.name })),
-          durationMs: (item.duration?.seconds || 180) * 1000,
-          cover: {
-            url: item.thumbnails?.[0]?.url || "",
-            width: 500,
-            height: 500
-          }
-        });
+        const formatted = formatTrack(item);
+        if (formatted) items.push(formatted);
       }
     }
 
@@ -80,21 +106,8 @@ app.get("/v1/search", async (req, res) => {
     const items = [];
 
     for (const song of searchResult.songs?.contents || searchResult.contents || []) {
-      const id = song.id || song.video_id;
-      if (!id) continue;
-      items.push({
-        type: "track",
-        id,
-        title: song.title || "Unknown Title",
-        artists: (song.artists || []).map(a => ({ id: a.id || "artist", name: a.name })),
-        album: song.album ? { id: song.album.id || "album", title: song.album.name } : undefined,
-        durationMs: (song.duration?.seconds || 180) * 1000,
-        cover: {
-          url: song.thumbnails?.[0]?.url || "",
-          width: 500,
-          height: 500
-        }
-      });
+      const formatted = formatTrack(song);
+      if (formatted) items.push(formatted);
     }
 
     res.json({ items });
@@ -109,28 +122,30 @@ app.get("/v1/tracks/:id", async (req, res) => {
   const id = req.params.id;
   try {
     const youtube = await getYt();
-    const info = await youtube.music.getInfo(id);
-    const basic = info.basic_info;
-
-    res.json({
-      id,
-      title: basic.title || "Track",
-      artists: [{ id: basic.channel_id || "artist", name: basic.author || "Artist" }],
-      durationMs: (basic.duration || 180) * 1000,
-      cover: {
-        url: basic.thumbnail?.[0]?.url || "",
-        width: 500,
-        height: 500
+    const searchRes = await youtube.music.search(id);
+    const first = (searchRes.songs?.contents || searchRes.contents || [])[0];
+    if (first) {
+      const formatted = formatTrack(first);
+      if (formatted) {
+        return res.json(formatted);
       }
-    });
+    }
   } catch (err) {
     console.error("Track details error:", err);
-    res.status(404).json({ error: "Track not found" });
   }
+
+  res.json({
+    type: "track",
+    id,
+    title: "Track",
+    artists: [{ id: "artist", name: "Artist" }],
+    durationMs: 180000,
+    cover: { url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, width: 500, height: 500 }
+  });
 });
 
 // 5. Radio (Similar Tracks / Up Next)
-app.all("/v1/tracks/:id/radio", async (req, res) => {
+app.all(["/v1/tracks/:id/radio", "/v1/radio/:id"], async (req, res) => {
   const id = req.params.id;
   try {
     const youtube = await getYt();
@@ -138,20 +153,10 @@ app.all("/v1/tracks/:id/radio", async (req, res) => {
     const items = [];
 
     for (const track of upNext.contents || []) {
-      const trackId = track.id || track.video_id;
-      if (!trackId || trackId === id) continue;
-      items.push({
-        type: "track",
-        id: trackId,
-        title: track.title,
-        artists: (track.artists || []).map(a => ({ id: a.id || "artist", name: a.name })),
-        durationMs: (track.duration?.seconds || 180) * 1000,
-        cover: {
-          url: track.thumbnails?.[0]?.url || "",
-          width: 500,
-          height: 500
-        }
-      });
+      const formatted = formatTrack(track);
+      if (formatted && formatted.id !== id) {
+        items.push(formatted);
+      }
     }
 
     res.json({ items });
@@ -161,12 +166,14 @@ app.all("/v1/tracks/:id/radio", async (req, res) => {
   }
 });
 
-// 6. Playback Session
-app.all("/v1/playback/:id", (req, res) => {
+// 6. Playback Session creation
+app.all(["/v1/tracks/:id/playback", "/v1/playback/:id"], (req, res) => {
   const id = req.params.id;
   res.json({
     sessionId: `ses_${id}_${Date.now()}`,
+    playbackId: `pb_${id}`,
     trackId: id,
+    transport: "proxy",
     streamUrl: `/v1/playback/${id}/media`,
     codec: "opus",
     bitrate: 160000,
@@ -175,40 +182,96 @@ app.all("/v1/playback/:id", (req, res) => {
   });
 });
 
-// 7. Audio Media Stream (Direct audio streaming from YouTube Music)
-app.get("/v1/playback/:id/media", async (req, res) => {
+// 7. Audio Media Stream (Direct audio streaming with disk cache)
+app.get(["/v1/playback/:id/media", "/v1/tracks/:id/playback/media"], (req, res) => {
   const id = req.params.id;
-  try {
-    const youtube = await getYt();
-    const downloadStream = await youtube.download(id, {
-      type: "audio",
-      quality: "best",
-      format: "any"
-    });
+  const cachedFile = path.join(CACHE_DIR, `${id}.webm`);
 
-    res.setHeader("Content-Type", "audio/webm");
-    res.setHeader("Accept-Ranges", "bytes");
-
-    // Convert Web ReadableStream to Node response stream
-    const reader = downloadStream.getReader();
-    async function pump() {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          res.end();
-          break;
+  // If already cached on disk, serve directly with Range support
+  if (fs.existsSync(cachedFile)) {
+    try {
+      const stat = fs.statSync(cachedFile);
+      if (stat.size > 10000) {
+        const range = req.headers.range;
+        if (range) {
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+          const chunksize = end - start + 1;
+          const fileStream = fs.createReadStream(cachedFile, { start, end });
+          res.writeHead(206, {
+            "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+            "Accept-Ranges": "bytes",
+            "Content-Length": chunksize,
+            "Content-Type": "audio/webm",
+          });
+          return fileStream.pipe(res);
+        } else {
+          res.writeHead(200, {
+            "Content-Length": stat.size,
+            "Accept-Ranges": "bytes",
+            "Content-Type": "audio/webm",
+          });
+          return fs.createReadStream(cachedFile).pipe(res);
         }
-        res.write(Buffer.from(value));
       }
+    } catch (e) {
+      console.error("Error reading cache:", e);
     }
-    pump().catch(err => {
-      console.error("Stream pump error:", err);
-      res.end();
-    });
-  } catch (err) {
-    console.error("Playback media error:", err);
-    res.status(500).json({ error: "Failed to stream audio" });
   }
+
+  // Not cached yet: Stream via yt-dlp through Tor proxy
+  res.setHeader("Content-Type", "audio/webm");
+  res.setHeader("Accept-Ranges", "bytes");
+
+  const tempFile = path.join(CACHE_DIR, `${id}.tmp`);
+  const fileWriteStream = fs.createWriteStream(tempFile);
+
+  const proc = spawn("yt-dlp", [
+    "--proxy", "socks5://127.0.0.1:9050",
+    "-f", "ba/b",
+    "-o", "-",
+    `https://www.youtube.com/watch?v=${id}`
+  ]);
+
+  let isClientClosed = false;
+  req.on("close", () => {
+    isClientClosed = true;
+    if (!res.writableEnded) {
+      try { res.end(); } catch {}
+    }
+  });
+
+  proc.stdout.on("data", (chunk) => {
+    if (!isClientClosed) {
+      res.write(chunk);
+    }
+    fileWriteStream.write(chunk);
+  });
+
+  proc.stdout.on("end", () => {
+    fileWriteStream.end();
+    if (!isClientClosed && !res.writableEnded) {
+      res.end();
+    }
+  });
+
+  fileWriteStream.on("finish", () => {
+    try {
+      if (fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
+        fs.renameSync(tempFile, cachedFile);
+        console.log(`[Cache] Successfully cached track: ${id}`);
+      }
+    } catch (e) {
+      console.error("Failed to rename temp file to cache:", e);
+    }
+  });
+
+  proc.on("error", (err) => {
+    console.error("yt-dlp spawn error:", err);
+    if (!res.headersSent) res.status(500).json({ error: "Stream error" });
+    try { fs.unlinkSync(tempFile); } catch {}
+  });
 });
 
 // 8. Synced Lyrics (via LRCLIB with fallback)
@@ -224,14 +287,12 @@ app.get("/v1/tracks/:id/lyrics", async (req, res) => {
     const title = info.basic_info.title || "";
     const artist = info.basic_info.author || "";
 
-    // Query LRCLIB for synced syllable/line lyrics
     const lrclibUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`;
     const lrcRes = await fetch(lrclibUrl, { headers: { "User-Agent": "Liner-SelfHosted/1.0" } });
     
     if (lrcRes.ok) {
       const data = await lrcRes.json();
       if (data.syncedLyrics) {
-        // Parse [mm:ss.xx] line
         const lines = data.syncedLyrics.split("\n");
         const events = [];
         for (const line of lines) {
@@ -260,19 +321,162 @@ app.get("/v1/tracks/:id/lyrics", async (req, res) => {
   }
 });
 
-// 9. User profile & Library mocks
-app.get("/v1/me", (req, res) => {
+// 9. Artist Details
+app.get("/v1/artists/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const youtube = await getYt();
+    const artist = await youtube.music.getArtist(id);
+    const name = artist.header?.title?.text || "Artist";
+    const tracks = [];
+    if (artist.sections) {
+      for (const section of artist.sections) {
+        if (section.contents) {
+          for (const item of section.contents) {
+            const trackId = item.id || item.video_id;
+            if (trackId) {
+              tracks.push({
+                type: "track",
+                id: trackId,
+                title: item.title?.text || item.title || "Track",
+                artists: [{ id, name }],
+                durationMs: (item.duration?.seconds || 180) * 1000,
+                cover: { url: item.thumbnails?.[0]?.url || "", width: 500, height: 500 }
+              });
+            }
+          }
+        }
+      }
+    }
+    res.json({
+      type: "artist",
+      id,
+      name,
+      verified: true,
+      tracks: tracks.slice(0, 50),
+      albums: [],
+      singles: []
+    });
+  } catch (err) {
+    res.json({
+      type: "artist",
+      id,
+      name: "Artist",
+      verified: true,
+      tracks: [],
+      albums: [],
+      singles: []
+    });
+  }
+});
+
+// 10. Album Details
+app.get("/v1/albums/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const youtube = await getYt();
+    const album = await youtube.music.getAlbum(id);
+    const title = album.header?.title?.text || "Album";
+    const tracks = [];
+    for (const item of album.contents || []) {
+      const trackId = item.id || item.video_id;
+      if (trackId) {
+        tracks.push({
+          type: "track",
+          id: trackId,
+          title: item.title?.text || item.title || "Track",
+          artists: (item.artists || []).map(a => ({ id: a.id || "artist", name: a.name })),
+          durationMs: (item.duration?.seconds || 180) * 1000,
+          cover: { url: item.thumbnails?.[0]?.url || "", width: 500, height: 500 }
+        });
+      }
+    }
+    res.json({
+      type: "album",
+      id,
+      title,
+      artists: (album.header?.author?.name ? [{ id: "artist", name: album.header.author.name }] : []),
+      tracks
+    });
+  } catch (err) {
+    res.json({
+      type: "album",
+      id,
+      title: "Album",
+      artists: [],
+      tracks: []
+    });
+  }
+});
+
+// 11. Playlist Details
+app.get(["/v1/catalog/playlists/:id", "/v1/playlists/:id"], async (req, res) => {
+  const id = req.params.id;
+  try {
+    const youtube = await getYt();
+    const pl = await youtube.music.getPlaylist(id);
+    const title = pl.header?.title?.text || "Playlist";
+    const tracks = [];
+    for (const item of pl.contents || []) {
+      const trackId = item.id || item.video_id;
+      if (trackId) {
+        tracks.push({
+          type: "track",
+          id: trackId,
+          title: item.title?.text || item.title || "Track",
+          artists: (item.artists || []).map(a => ({ id: a.id || "artist", name: a.name })),
+          durationMs: (item.duration?.seconds || 180) * 1000,
+          cover: { url: item.thumbnails?.[0]?.url || "", width: 500, height: 500 }
+        });
+      }
+    }
+    res.json({
+      type: "playlist",
+      id,
+      title,
+      tracks
+    });
+  } catch (err) {
+    res.json({
+      type: "playlist",
+      id,
+      title: "Playlist",
+      tracks: []
+    });
+  }
+});
+
+// 12. User profile, Auth & Library mocks
+app.all("/v1/auth/login", (req, res) => {
+  res.json({
+    accessToken: "self_token_" + Date.now(),
+    refreshToken: "self_refresh_" + Date.now(),
+    user: { id: "self_user", username: "selfhost", displayName: "Oracle Cloud User" }
+  });
+});
+app.all("/v1/auth/register", (req, res) => {
+  res.json({
+    accessToken: "self_token_" + Date.now(),
+    refreshToken: "self_refresh_" + Date.now(),
+    user: { id: "self_user", username: "selfhost", displayName: "Oracle Cloud User" }
+  });
+});
+app.get(["/v1/me", "/v1/users/me"], (req, res) => {
   res.json({ id: "self_user", username: "selfhost", displayName: "Oracle Cloud User" });
 });
 app.get("/v1/me/playlists", (req, res) => res.json({ items: [] }));
 app.get("/v1/me/library/tracks", (req, res) => res.json({ items: [] }));
 app.get("/v1/me/history", (req, res) => res.json({ items: [] }));
 app.get("/v1/me/recommendations/daily-mixes", (req, res) => res.json({ items: [] }));
-app.post("/v1/me/playback/events", (req, res) => res.json({ ok: true }));
+app.get("/v1/me/recommendations/wave", (req, res) => res.json({ tracks: [] }));
+app.get("/v1/me/recommendations/taste", (req, res) => res.json({ topGenres: [], topArtists: [] }));
+app.all("/v1/me/playback/events", (req, res) => res.json({ ok: true }));
+app.get("/v1/leaderboards/*", (req, res) => res.json({ items: [], period: "monthly" }));
 
 function getFallbackPopular() {
   return [
     {
+      type: "track",
       id: "ngpLgc54vBc",
       title: "EM ĐAU",
       artists: [{ id: "plk", name: "Phùng Khánh Linh" }],
