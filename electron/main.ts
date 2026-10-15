@@ -1032,16 +1032,55 @@ if (!gotTheLock) {
         }
       }
 
+      // Find compatible Python 3.10+ (macOS Xcode default is 3.9 which is unsupported by yt-dlp)
+      let pythonExecutable: string | null = null;
+      for (const p of [
+        "/opt/homebrew/bin/python3",
+        "/usr/local/bin/python3",
+        "/opt/homebrew/bin/python3.13",
+        "/opt/homebrew/bin/python3.12",
+        "/opt/homebrew/bin/python3.11",
+        "/opt/homebrew/bin/python3.10",
+      ]) {
+        if (fs.existsSync(p)) {
+          pythonExecutable = p;
+          break;
+        }
+      }
+
+      const commonPaths = [
+        "/opt/homebrew/bin",
+        "/opt/homebrew/sbin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+        "/usr/bin",
+        "/bin",
+        "/usr/sbin",
+        "/sbin",
+      ];
+      const envPath = `${commonPaths.join(":")}:${process.env.PATH || ""}`;
+
       return new Promise<{ streamUrl: string; mimeType: string; codec: string } | null>((resolve) => {
         try {
-          const proc = spawn(binary, [
+          const baseArgs = [
             "--no-playlist",
             "--no-warnings",
             "-f", "140/ba/bestaudio",
             "-g",
             `https://www.youtube.com/watch?v=${trackId}`
-          ]);
+          ];
+
+          const execCmd = pythonExecutable || binary;
+          const execArgs = pythonExecutable ? [binary, ...baseArgs] : baseArgs;
+
+          const proc = spawn(execCmd, execArgs, {
+            env: {
+              ...process.env,
+              PATH: envPath,
+            },
+          });
           let stdout = "";
+          let stderr = "";
           const timer = setTimeout(() => {
             try { proc.kill("SIGKILL"); } catch {}
             console.error("[audio:resolve-stream] timed out for", trackId);
@@ -1050,6 +1089,9 @@ if (!gotTheLock) {
 
           proc.stdout.on("data", (data) => {
             stdout += data.toString();
+          });
+          proc.stderr.on("data", (data) => {
+            stderr += data.toString();
           });
           proc.on("close", (code) => {
             clearTimeout(timer);
@@ -1063,12 +1105,13 @@ if (!gotTheLock) {
                 codec: "aac"
               });
             } else {
-              console.error("[audio:resolve-stream] failed for", trackId, "exit code:", code, "stdout:", stdout.slice(0, 100));
+              console.error("[audio:resolve-stream] failed for", trackId, "exit code:", code, "stdout:", stdout.slice(0, 100), "stderr:", stderr.slice(0, 100));
               resolve(null);
             }
           });
-          proc.on("error", () => {
+          proc.on("error", (err) => {
             clearTimeout(timer);
+            console.error("[audio:resolve-stream] spawn error:", err);
             resolve(null);
           });
         } catch {
