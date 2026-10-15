@@ -67,11 +67,16 @@ export function usePopularTracksOnly(limit = 20) {
       .getPopularTracks("7d", limit)
       .then((res) => {
         if (!active) return;
-        const items: PopularItem[] = (res.items || []).map((entry) => ({
-          type: "track",
-          item: toClientTrack(entry.track),
-          playCount: entry.playCount,
-        }));
+        const items: PopularItem[] = (res.items || [])
+          .map((entry: any) => {
+            const rawTrack = entry.track || entry;
+            return {
+              type: "track" as const,
+              item: toClientTrack(rawTrack),
+              playCount: entry.playCount || 1000,
+            };
+          })
+          .filter((it) => Boolean(it.item.id));
         cache.set(`tracks_7d_${limit}`, { data: items, timestamp: Date.now() });
         setData(items);
       })
@@ -107,11 +112,16 @@ export function usePopularTracksAllTime(limit = 20) {
       .getPopularTracks("all", limit)
       .then((res) => {
         if (!active) return;
-        const items: PopularItem[] = (res.items || []).map((entry) => ({
-          type: "track",
-          item: toClientTrack(entry.track),
-          playCount: entry.playCount,
-        }));
+        const items: PopularItem[] = (res.items || [])
+          .map((entry: any) => {
+            const rawTrack = entry.track || entry;
+            return {
+              type: "track" as const,
+              item: toClientTrack(rawTrack),
+              playCount: entry.playCount || 1000,
+            };
+          })
+          .filter((it) => Boolean(it.item.id));
         cache.set(`tracks_all_${limit}`, { data: items, timestamp: Date.now() });
         setData(items);
       })
@@ -148,8 +158,10 @@ export function usePopular(limit = 50) {
       .then((res) => {
         if (!active) return;
         const artistMap = new Map<string, PopularArtistItem>();
-        for (const entry of res.items || []) {
-          const track = toClientTrack(entry.track);
+        for (const entry of (res.items as any[]) || []) {
+          const rawTrack = entry.track || entry;
+          const track = toClientTrack(rawTrack);
+          if (!track.id) continue;
           const artistName =
             track.artistList?.[0]?.name ||
             track.artists?.split(",")?.[0]?.trim() ||

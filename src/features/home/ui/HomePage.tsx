@@ -41,12 +41,7 @@ export default function HomePage() {
     useRecentlyPlayed(20);
   const { data: dailyMixes } = useDailyMixes();
 
-  const isDataLoading =
-    tracksLoading ||
-    allTimeLoading ||
-    popularLoading ||
-    recentLoading ||
-    likedLoading;
+  const isDataLoading = tracksLoading && allTimeLoading;
 
   const popularAlbums =
     popularItems?.filter((it) => it.type === "album") ?? [];
