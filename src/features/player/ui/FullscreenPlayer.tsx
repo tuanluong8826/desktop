@@ -330,13 +330,14 @@ export function FullscreenPlayer({
   const currentTrackId = player.currentTrack?.id;
   const isMatchingTrack = Boolean(currentTrackId && currentLyricsTrackId === currentTrackId);
   const hasLyrics = isMatchingTrack && braccatoLyrics.length > 0;
+  const hasPlainLyrics = isMatchingTrack && !hasLyrics && Boolean(plainLyrics && plainLyrics.trim() && plainLyrics !== "[INSTRUMENTAL]");
   const hasSyncedSources = hasSyncedLyricsSources(
     availableProviders,
     braccatoLyrics,
     rawFormat,
   );
   const showProviderIsland =
-    hasLyrics && (hasSyncedSources || availableProviders.length > 1);
+    (hasLyrics || hasPlainLyrics) && (hasSyncedSources || availableProviders.length > 1);
   const isInstrumental =
     isMatchingTrack &&
     !lyricsLoading &&
@@ -434,6 +435,26 @@ export function FullscreenPlayer({
                 className="absolute inset-0 flex items-center justify-center text-text-tertiary text-lg"
               >
                 <span>{t("player.instrumental")}</span>
+              </motion.div>
+            ) : hasPlainLyrics ? (
+              <motion.div
+                key={`plain-lyrics-${currentTrackId}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeInOut" }}
+                className="absolute inset-0 flex flex-col items-center justify-start overflow-y-auto px-6 py-16 scrollbar-none"
+              >
+                <div
+                  className="flex flex-col gap-6 text-center max-w-[560px] w-full text-white/85 font-semibold text-[22px] leading-[1.6] select-text my-auto"
+                  style={{ fontFamily: "var(--font-inter), sans-serif", letterSpacing: "-0.015em" }}
+                >
+                  {plainLyrics!.split("\n").map((line, idx) => (
+                    <p key={idx} className={line.trim() ? "min-h-[1.5em]" : "h-5"}>
+                      {line}
+                    </p>
+                  ))}
+                </div>
               </motion.div>
             ) : !hasLyrics ? (
               <motion.div

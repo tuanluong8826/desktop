@@ -955,8 +955,14 @@ export const api = {
   async *streamLyrics(
     id: string,
     signal?: AbortSignal,
+    meta?: { title?: string; artist?: string; durationMs?: number },
   ): AsyncGenerator<LyricsStreamEvent> {
-    const path = `/v1/tracks/${encodeURIComponent(id)}/lyrics`;
+    const q = new URLSearchParams();
+    if (meta?.title) q.set("title", meta.title);
+    if (meta?.artist) q.set("artist", meta.artist);
+    if (meta?.durationMs) q.set("duration", String(Math.round(meta.durationMs / 1000)));
+    const qs = q.toString();
+    const path = `/v1/tracks/${encodeURIComponent(id)}/lyrics${qs ? `?${qs}` : ""}`;
     const signedHeaders = await signApiRequest("GET", path);
     const accessToken = await getValidAccessToken();
     const requestId =

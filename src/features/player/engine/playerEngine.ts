@@ -1068,7 +1068,11 @@ class PlayerEngine {
     }
 
     if (!lyricsCache.has(nextTrack.id)) {
-      void this.prefetchLyrics(nextTrack.id);
+      void this.prefetchLyrics(nextTrack.id, {
+        title: nextTrack.title,
+        artist: nextTrack.artists,
+        durationMs: nextTrack.durationMs,
+      });
     }
 
     void linerDb.putTrack(nextTrack);
@@ -1078,7 +1082,10 @@ class PlayerEngine {
     }
   }
 
-  private async prefetchLyrics(trackId: string): Promise<void> {
+  private async prefetchLyrics(
+    trackId: string,
+    meta?: { title?: string; artist?: string; durationMs?: number },
+  ): Promise<void> {
     if (!trackId) return;
 
     if (lyricsCache.has(trackId)) return;
@@ -1105,7 +1112,7 @@ class PlayerEngine {
         }[] = [];
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
-        for await (const event of api.streamLyrics(trackId, controller.signal)) {
+        for await (const event of api.streamLyrics(trackId, controller.signal, meta)) {
           if (event.type === "provider" && event.status === "found") {
             const candidate = event.candidate;
             if (shouldCacheLyricsCandidate(candidate)) {
@@ -1267,7 +1274,11 @@ class PlayerEngine {
     log("cyan", "lyrics", `fetching for "${track.title}"`);
 
     try {
-      for await (const event of api.streamLyrics(trackId, controller.signal)) {
+      for await (const event of api.streamLyrics(trackId, controller.signal, {
+        title: track.title,
+        artist: track.artists,
+        durationMs: track.durationMs,
+      })) {
         if (token !== this.lyricsLoadToken || controller.signal.aborted) break;
 
         if (event.type === "provider" && event.status === "found") {
