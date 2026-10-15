@@ -63,7 +63,7 @@ export interface SessionState {
   keepSpeedAcrossTracks: boolean;
   isReverbEnabled: boolean;
   reverbLevel: number;
-  discordRpcEnabled?: boolean;
+  discordRpcEnabled: boolean;
 }
 
 export type PlayerState = TransportState &

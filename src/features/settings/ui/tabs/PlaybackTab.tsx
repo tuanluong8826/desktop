@@ -133,7 +133,7 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
         searchQuery={searchQuery}
         control={
           <ToggleSwitch
-            checked={discordRpcEnabled}
+            checked={Boolean(discordRpcEnabled)}
             onChange={setDiscordRpcEnabled}
             ariaLabel="Bật tắt Discord Rich Presence"
           />
