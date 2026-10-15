@@ -63,6 +63,7 @@ export interface SessionState {
   keepSpeedAcrossTracks: boolean;
   isReverbEnabled: boolean;
   reverbLevel: number;
+  discordRpcEnabled: boolean;
 }
 
 export type PlayerState = TransportState &
@@ -117,6 +118,7 @@ export interface PlayerStore extends PlayerState {
   setKeepSpeedAcrossTracks: (keep: boolean) => void;
   setIsReverbEnabled: (enabled: boolean) => void;
   setReverbLevel: (level: number) => void;
+  setDiscordRpcEnabled: (enabled: boolean) => void;
   resetSpeedAndPitch: () => void;
   clearQueue: () => void;
 }
@@ -160,6 +162,7 @@ export const usePlayerStore = create<PlayerStore>()(
       keepSpeedAcrossTracks: true,
       isReverbEnabled: false,
       reverbLevel: 0.35,
+      discordRpcEnabled: true,
 
       dispatch: () => {
         // Implementation injected by PlayerEngine
@@ -210,6 +213,12 @@ export const usePlayerStore = create<PlayerStore>()(
       setIsReverbEnabled: (isReverbEnabled: boolean) => set({ isReverbEnabled }),
       setReverbLevel: (reverbLevel: number) =>
         set({ reverbLevel: Math.max(0, Math.min(1, reverbLevel)) }),
+      setDiscordRpcEnabled: (discordRpcEnabled: boolean) => {
+        set({ discordRpcEnabled });
+        if (typeof window !== "undefined" && window.linerElectron?.setDiscordRpcEnabled) {
+          void window.linerElectron.setDiscordRpcEnabled(discordRpcEnabled);
+        }
+      },
       resetSpeedAndPitch: () => set({ playbackRate: 1, pitchSemitones: 0 }),
       clearQueue: () => {
         const state = get();
@@ -310,6 +319,7 @@ export const usePlayerStore = create<PlayerStore>()(
         keepSpeedAcrossTracks: state.keepSpeedAcrossTracks,
         isReverbEnabled: state.isReverbEnabled,
         reverbLevel: state.reverbLevel,
+        discordRpcEnabled: state.discordRpcEnabled,
       }),
     },
   ),

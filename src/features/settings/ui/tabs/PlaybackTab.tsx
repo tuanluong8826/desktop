@@ -29,6 +29,10 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const setPauseOnDeviceChange = usePlayerStore(
     (state) => state.setPauseOnDeviceChange,
   );
+  const discordRpcEnabled = usePlayerStore((state) => state.discordRpcEnabled);
+  const setDiscordRpcEnabled = usePlayerStore(
+    (state) => state.setDiscordRpcEnabled,
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -119,6 +123,19 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
           <ToggleSwitch
             checked={pauseOnDeviceChange}
             onChange={setPauseOnDeviceChange}
+          />
+        }
+      />
+
+      <SettingRow
+        title="Discord Rich Presence (RPC)"
+        description="Hiển thị bài hát đang nghe, ảnh bìa và thời lượng bài hát lên trang cá nhân Discord (giống Spotify)"
+        searchQuery={searchQuery}
+        control={
+          <ToggleSwitch
+            checked={discordRpcEnabled}
+            onChange={setDiscordRpcEnabled}
+            ariaLabel="Bật tắt Discord Rich Presence"
           />
         }
       />

@@ -785,6 +785,7 @@ class PlayerEngine {
         return;
       }
       playerRuntime.seek(nextMs);
+      void this.syncDiscordPresence(usePlayerStore.getState());
       if (autoPlay && store.status !== "playing") {
         this.resume();
       }
@@ -1005,9 +1006,36 @@ class PlayerEngine {
   }
 
   private async syncDiscordPresence(
-    _state: PlayerState,
+    state: PlayerState,
     _trackChanged: boolean = false,
   ): Promise<void> {
+    if (typeof window === "undefined" || !window.linerElectron?.setDiscordActivity) {
+      return;
+    }
+
+    if (!state.discordRpcEnabled) {
+      void window.linerElectron.setDiscordActivity(null);
+      return;
+    }
+
+    const currentTrack = state.currentTrack;
+    if (!currentTrack || state.status === "idle" || state.status === "error") {
+      void window.linerElectron.setDiscordActivity(null);
+      return;
+    }
+
+    const isPaused = state.status === "paused";
+    const activity = {
+      title: currentTrack.title || "Unknown Title",
+      artist: currentTrack.artist || "Unknown Artist",
+      album: currentTrack.album || undefined,
+      coverUrl: currentTrack.coverUrl || undefined,
+      durationMs: state.durationMs || currentTrack.durationMs || 0,
+      positionMs: state.positionMs || 0,
+      paused: isPaused,
+    };
+
+    void window.linerElectron.setDiscordActivity(activity);
   }
 
   private preloadNextTrack(state: PlayerState): void {

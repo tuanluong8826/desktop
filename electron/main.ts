@@ -34,6 +34,7 @@ import { TouchBarManager } from "./touchbar.js";
 import { OverlayManager } from "./overlay.js";
 import { BundleManager } from "./bundle-manager.js";
 import { createSleepBlocker } from "./sleep-blocker.js";
+import { discordRpc, type DiscordSongActivity } from "./discord-rpc.js";
 
 // root error handling for main process
 process.on("uncaughtException", (error) => {
@@ -256,6 +257,19 @@ if (!gotTheLock) {
     );
     overlayManager.setMainWindow(mainWindow);
     overlayManager.registerShortcut();
+
+    // initialize Discord Rich Presence
+    void discordRpc.connect();
+
+    ipcMain.handle("discord:set-activity", (_event, activity: DiscordSongActivity | null) => {
+      discordRpc.setActivity(activity);
+      return true;
+    });
+
+    ipcMain.handle("discord:set-enabled", (_event, enabled: boolean) => {
+      discordRpc.setEnabled(enabled);
+      return true;
+    });
 
     const isHyprland = Boolean(
       process.env.HYPRLAND_INSTANCE_SIGNATURE ||
@@ -1035,4 +1049,5 @@ app.on("will-quit", () => {
   touchBarManager?.unregisterShortcut();
   overlayManager?.unregisterShortcut();
   overlayManager?.destroy();
+  discordRpc.disconnect();
 });
