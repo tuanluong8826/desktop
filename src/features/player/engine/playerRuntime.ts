@@ -548,7 +548,7 @@ export class PlayerRuntime {
 
         if (this.audio.readyState < 3) {
           await new Promise<void>((resolve) => {
-            const timeout = setTimeout(resolve, 3000);
+            const timeout = setTimeout(resolve, import.meta.env.TEST ? 50 : 10000);
             const onCanPlay = () => {
               clearTimeout(timeout);
               this.audio.removeEventListener("canplay", onCanPlay);
@@ -622,7 +622,7 @@ export class PlayerRuntime {
 
       if (this.audio.readyState < 3) {
         await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 3000);
+          const timeout = setTimeout(resolve, import.meta.env.TEST ? 50 : 25000);
           const onCanPlay = () => {
             clearTimeout(timeout);
             this.audio.removeEventListener("canplay", onCanPlay);

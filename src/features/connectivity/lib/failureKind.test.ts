@@ -36,7 +36,8 @@ describe("isConnectivityFailure", () => {
     expect(isPlaybackPath("/v1/tracks/123/playback/media")).toBe(true);
     expect(isPlaybackPath("/v1/tracks/123/lyrics")).toBe(true);
     expect(isPlaybackPath("/v1/playback/sess_123/media")).toBe(true);
-    expect(isPlaybackPath("/v1/tracks/123/playback?transport=proxy")).toBe(true);
+    expect(isPlaybackPath("/v1/me/library/albums")).toBe(true);
+    expect(isPlaybackPath("/v1/me/playlists")).toBe(true);
     expect(isPlaybackPath("/v1/me")).toBe(false);
     expect(isPlaybackPath("/v1/playlists/123")).toBe(false);
     expect(isPlaybackPath("/v1/auth/session")).toBe(false);

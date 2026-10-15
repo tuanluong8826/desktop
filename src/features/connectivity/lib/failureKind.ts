@@ -20,7 +20,7 @@ export function isPlaybackPath(path: string): boolean {
   return (
     /^\/v1\/tracks\/[^/]+\/(?:playback|lyrics|radio)(?:\/|$)/.test(stripped) ||
     /^\/v1\/playback(?:\/|$)/.test(stripped) ||
-    /^\/v1\/me\/(?:recommendations|playback\/events|history)(?:\/|$)/.test(stripped) ||
+    /^\/v1\/me\/(?:recommendations|playback\/events|history|library|playlists)(?:\/|$)/.test(stripped) ||
     /^\/v1\/explore\/popular(?:\/|$)/.test(stripped)
   );
 }

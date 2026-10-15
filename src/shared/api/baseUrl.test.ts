@@ -42,25 +42,24 @@ describe("baseUrl endpoint manager & probe", () => {
     vi.restoreAllMocks();
   });
 
-  it("defaults to primary api and persists when switching to edge", () => {
+  it("defaults to primary api and stays fixed", () => {
     expect(getApiBaseUrl()).toBe(DEFAULT_PRIMARY_API);
     const switched = switchToFallbackEdge();
-    expect(switched).toBe(true);
-    expect(getApiBaseUrl()).toBe(FALLBACK_EDGE_API);
-    expect(storageMap.get("liner_active_api_base")).toBe(FALLBACK_EDGE_API);
+    expect(switched).toBe(false);
+    expect(getApiBaseUrl()).toBe(DEFAULT_PRIMARY_API);
   });
 
-  it("switches to edge relay when health probe fails", async () => {
+  it("always resolves to dedicated server on probe", async () => {
     resetEndpointProbe();
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
 
     const endpoint = await initApiEndpointProbe(500);
-    expect(endpoint).toBe(FALLBACK_EDGE_API);
-    expect(getApiBaseUrl()).toBe(FALLBACK_EDGE_API);
-    expect(storageMap.get("liner_active_api_base")).toBe(FALLBACK_EDGE_API);
+    expect(endpoint).toBe(DEFAULT_PRIMARY_API);
+    expect(getApiBaseUrl()).toBe(DEFAULT_PRIMARY_API);
+    expect(storageMap.get("liner_active_api_base")).toBe(DEFAULT_PRIMARY_API);
   });
 
-  it("preserves primary api when health probe succeeds", async () => {
+  it("preserves primary api when probe runs", async () => {
     resetEndpointProbe();
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -71,18 +70,6 @@ describe("baseUrl endpoint manager & probe", () => {
     expect(endpoint).toBe(DEFAULT_PRIMARY_API);
     expect(getApiBaseUrl()).toBe(DEFAULT_PRIMARY_API);
     expect(storageMap.get("liner_active_api_base")).toBe(DEFAULT_PRIMARY_API);
-  });
-
-  it("does not overwrite custom server during health probe", async () => {
-    resetEndpointProbe();
-    const customUrl = "http://localhost:3000";
-    setApiBaseUrl(customUrl);
-    expect(getApiBaseUrl()).toBe(customUrl);
-
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    const endpoint = await initApiEndpointProbe(500);
-    expect(endpoint).toBe(customUrl);
-    expect(getApiBaseUrl()).toBe(customUrl);
   });
 });
 

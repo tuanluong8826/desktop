@@ -21,28 +21,9 @@ export function isCustomServer(url = currentBaseUrl): boolean {
 }
 
 function loadStoredBaseUrl(): string {
-  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
-  if (isExplicitCustomOverride(envUrl)) {
-    return envUrl!.replace(/\/+$/, "");
-  }
   if (typeof window !== "undefined") {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored && typeof stored === "string") {
-        const trimmed = stored.trim().replace(/\/+$/, "");
-        // If stored contains legacy tryliner.fun or old edge relay, automatically migrate to default primary!
-        if (
-          trimmed.includes("tryliner.fun") ||
-          trimmed === "http://edge.tryliner.fun:10518" ||
-          trimmed === "https://api.tryliner.fun"
-        ) {
-          localStorage.setItem(STORAGE_KEY, DEFAULT_PRIMARY_API);
-          return DEFAULT_PRIMARY_API;
-        }
-        if (trimmed.length > 0) {
-          return trimmed;
-        }
-      }
+      localStorage.setItem(STORAGE_KEY, DEFAULT_PRIMARY_API);
     } catch {}
   }
   return DEFAULT_PRIMARY_API;
