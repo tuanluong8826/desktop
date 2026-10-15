@@ -63,14 +63,10 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const handleServerModeChange = (mode: "primary" | "edge" | "custom") => {
     setServerMode(mode);
     setPingStatus(null);
-    if (mode === "primary") {
+    if (mode === "primary" || mode === "edge") {
       setApiBaseUrl(DEFAULT_PRIMARY_API);
       setCurrentApiUrl(DEFAULT_PRIMARY_API);
-      toast("Đã chuyển sang Máy chủ chính (api.tryliner.fun)", "info");
-    } else if (mode === "edge") {
-      setApiBaseUrl(FALLBACK_EDGE_API);
-      setCurrentApiUrl(FALLBACK_EDGE_API);
-      toast("Đã chuyển sang Máy chủ dự phòng (edge.tryliner.fun:10518)", "info");
+      toast("Đã chuyển sang Máy chủ riêng (miloapi.dev/liner)", "info");
     } else {
       if (customUrlInput.trim()) {
         setApiBaseUrl(customUrlInput.trim());
@@ -221,9 +217,8 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
                 value={serverMode}
                 onChange={handleServerModeChange}
                 options={[
-                  { value: "primary", label: "Chính" },
-                  { value: "edge", label: "Dự phòng (Edge)" },
-                  { value: "custom", label: "Tùy chỉnh" },
+                  { value: "primary", label: "Máy chủ riêng (miloapi.dev)" },
+                  { value: "custom", label: "Tùy chỉnh khác" },
                 ]}
               />
             ) : (
