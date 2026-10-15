@@ -96,7 +96,7 @@ export async function runAllChecks(): Promise<DiagnosticsResult> {
   }
   checks.push(await ping("link", `${SHARE_BASE_URL}/health`));
 
-  const hosts = [API_BASE, COVERS_BASE, SHARE_BASE_URL].map(hostOf);
+  const hosts = [getApiBaseUrl(), COVERS_BASE, SHARE_BASE_URL].map(hostOf);
   let main: MainNetResult | null = null;
   try {
     const bridge = typeof window !== "undefined" ? window.linerElectron?.diagnoseNetwork : undefined;
