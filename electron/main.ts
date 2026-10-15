@@ -1036,6 +1036,7 @@ if (!gotTheLock) {
         try {
           const proc = spawn(binary, [
             "--no-playlist",
+            "--no-warnings",
             "-f", "140/ba/bestaudio",
             "-g",
             `https://www.youtube.com/watch?v=${trackId}`
@@ -1043,22 +1044,26 @@ if (!gotTheLock) {
           let stdout = "";
           const timer = setTimeout(() => {
             try { proc.kill("SIGKILL"); } catch {}
+            console.error("[audio:resolve-stream] timed out for", trackId);
             resolve(null);
-          }, 8000);
+          }, 10000);
 
           proc.stdout.on("data", (data) => {
             stdout += data.toString();
           });
           proc.on("close", (code) => {
             clearTimeout(timer);
-            const url = stdout.trim().split("\n")[0];
-            if (code === 0 && url && url.startsWith("http")) {
+            const lines = stdout.trim().split("\n");
+            const url = lines.find((l) => l.trim().startsWith("http"))?.trim();
+            if (code === 0 && url) {
+              console.log("[audio:resolve-stream] resolved", trackId, "in under 10s");
               resolve({
                 streamUrl: url,
                 mimeType: "audio/mp4",
                 codec: "aac"
               });
             } else {
+              console.error("[audio:resolve-stream] failed for", trackId, "exit code:", code, "stdout:", stdout.slice(0, 100));
               resolve(null);
             }
           });

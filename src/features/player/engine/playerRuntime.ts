@@ -542,9 +542,8 @@ export class PlayerRuntime {
         return;
       }
 
-      if (cachedAudio) {
+      if (cachedAudio && cachedAudio.blob && cachedAudio.blob.size > 10000 && cachedAudio.byteSize > 10000) {
         this.currentSessionExpiresAt = null;
-        this.recoveryAttempts = 0;
         void linerDb.putTrack(track);
         const blobUrl = URL.createObjectURL(cachedAudio.blob);
         this.activeBlobUrl = blobUrl;
@@ -598,6 +597,8 @@ export class PlayerRuntime {
           `started (cached): ${track.title} in ${audioStartLatencyMs}ms`,
         );
         return;
+      } else if (cachedAudio) {
+        void linerDb.deleteAudio(track.id);
       }
 
       let resolvedUrl: string | null = null;
@@ -608,10 +609,7 @@ export class PlayerRuntime {
       const nativeElectron = (typeof window !== "undefined" && (window as any).linerElectron);
       if (nativeElectron?.resolveStream) {
         try {
-          const nativeRes = await Promise.race([
-            nativeElectron.resolveStream(track.id),
-            new Promise<null>((r) => setTimeout(() => r(null), 4000))
-          ]);
+          const nativeRes = await nativeElectron.resolveStream(track.id);
           if (nativeRes?.streamUrl) {
             resolvedUrl = nativeRes.streamUrl;
             sessionMime = nativeRes.mimeType || "audio/mp4";

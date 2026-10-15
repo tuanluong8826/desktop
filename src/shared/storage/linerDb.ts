@@ -254,7 +254,14 @@ class LinerDb {
 
   async getAudio(trackId: string): Promise<CachedAudioRecord | null> {
     const mem = this.memAudio.get(trackId);
-    if (mem) return mem;
+    if (mem) {
+      if (!mem.blob || mem.byteSize < 10000 || mem.blob.size < 10000) {
+        this.memAudio.delete(trackId);
+        void this.deleteAudio(trackId);
+        return null;
+      }
+      return mem;
+    }
 
     const result = await this.runTransaction("audio", "readonly", (store) => {
       return new Promise<CachedAudioRecord | null>((resolve) => {
@@ -265,13 +272,21 @@ class LinerDb {
     });
 
     if (result) {
+      if (!result.blob || result.byteSize < 10000 || result.blob.size < 10000) {
+        this.memAudio.delete(trackId);
+        void this.deleteAudio(trackId);
+        return null;
+      }
       this.memAudio.set(trackId, result);
       return result;
     }
-    return this.memAudio.get(trackId) || null;
+    return null;
   }
 
   async putAudio(trackId: string, blob: Blob, mimeType: string, lastPlayedAt?: number): Promise<void> {
+    if (!blob || blob.size < 10000) {
+      return;
+    }
     const existing = this.memAudio.get(trackId);
     const now = Date.now();
     const record: CachedAudioRecord = {
