@@ -445,6 +445,11 @@ export function FullscreenPlayer({
                 transition={{ duration: 0.22, ease: "easeInOut" }}
                 className="absolute inset-0 flex flex-col items-center justify-start overflow-y-auto px-6 py-16 scrollbar-none"
               >
+                {activeProvider?.toLowerCase().includes("ai") ? (
+                  <div className="mb-6 px-3.5 py-1 rounded-full text-xs font-medium tracking-wide bg-white/10 text-white/80 border border-white/15 backdrop-blur-md">
+                    ✨ Lyric by AI
+                  </div>
+                ) : null}
                 <div
                   className="flex flex-col gap-6 text-center max-w-[560px] w-full text-white/85 font-semibold text-[22px] leading-[1.6] select-text my-auto"
                   style={{ fontFamily: "var(--font-inter), sans-serif", letterSpacing: "-0.015em" }}

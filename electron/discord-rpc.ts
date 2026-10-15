@@ -7,6 +7,7 @@
 import net from "node:net";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 
 export interface DiscordSongActivity {
   title: string;
@@ -18,13 +19,14 @@ export interface DiscordSongActivity {
   paused?: boolean;
 }
 
-const DEFAULT_CLIENT_ID = "1341029482928394240"; // Default Liner Discord App ID
+const DEFAULT_CLIENT_ID = "1506557496276549642"; // Milo/Liner Discord App ID
 
 export class DiscordRpcClient {
   private socket: net.Socket | null = null;
   private clientId: string;
   private isConnected = false;
   private isConnecting = false;
+  private isHandshakeComplete = false;
   private enabled = true;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private currentActivity: DiscordSongActivity | null = null;
@@ -59,6 +61,7 @@ export class DiscordRpcClient {
     }
 
     const candidateDirs = [
+      os.tmpdir(),
       process.env.XDG_RUNTIME_DIR,
       process.env.TMPDIR,
       process.env.TMP,
@@ -93,9 +96,6 @@ export class DiscordRpcClient {
           this.isConnecting = false;
           this.isConnected = true;
           this.sendHandshake();
-          if (this.currentActivity) {
-            this.sendActivityPayload(this.currentActivity);
-          }
           return true;
         }
       } catch {
@@ -126,12 +126,26 @@ export class DiscordRpcClient {
   }
 
   private setupSocketEvents(sock: net.Socket): void {
-    sock.on("data", (_data: Buffer) => {
-      // Packet received from Discord
+    sock.on("data", (data: Buffer) => {
+      try {
+        if (data.length >= 8) {
+          const len = data.readInt32LE(4);
+          const raw = data.subarray(8, 8 + len).toString("utf-8");
+          const json = JSON.parse(raw);
+          if (json.evt === "READY") {
+            this.isHandshakeComplete = true;
+            console.log("[DiscordRPC] Connected to Discord as", json.data?.user?.username);
+            if (this.currentActivity) {
+              this.sendActivityPayload(this.currentActivity);
+            }
+          }
+        }
+      } catch {}
     });
 
     sock.on("close", () => {
       this.isConnected = false;
+      this.isHandshakeComplete = false;
       this.socket = null;
       if (this.enabled) {
         this.scheduleReconnect();
@@ -140,6 +154,7 @@ export class DiscordRpcClient {
 
     sock.on("error", () => {
       this.isConnected = false;
+      this.isHandshakeComplete = false;
       sock.destroy();
       this.socket = null;
     });
@@ -182,7 +197,7 @@ export class DiscordRpcClient {
     this.currentActivity = activity;
     if (!this.enabled) return;
 
-    if (!this.isConnected) {
+    if (!this.isConnected || !this.isHandshakeComplete) {
       void this.connect();
       return;
     }
