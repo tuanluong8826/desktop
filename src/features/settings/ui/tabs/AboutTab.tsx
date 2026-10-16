@@ -20,6 +20,7 @@ import pixelLogo from "@/assets/branding/logo-pixel.svg";
 import scanlinesLogo from "@/assets/branding/logo-scanlines.svg";
 import vhsLogo from "@/assets/branding/logo-vhs.svg";
 import { usePlayerStore, type AccentVariant } from "@/features/player";
+import { APP_ICONS } from "@/features/player/hooks/useAppIconSync";
 import { useUpdaterStore } from "@/features/updater";
 
 const brandingLogos: Record<Exclude<AccentVariant, "default">, string> = {
@@ -43,6 +44,7 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const accentVariant = usePlayerStore((state) => state.accentVariant);
+  const appIconStyle = usePlayerStore((state) => state.appIconStyle) || "default";
 
   const [appVersion, setAppVersion] = useState(APP_VERSION);
   const [bundleInfo, setBundleInfo] = useState<{
@@ -126,27 +128,33 @@ export function AboutTab({ searchQuery }: { searchQuery?: string }) {
       {/* ── Unified Centered About Card ── */}
       <div className="relative w-full max-w-[440px] overflow-hidden rounded-2xl bg-border-alpha-14 p-[24px] flex flex-col items-center text-center border border-border-primary/40 shadow-sm">
         {/* Logo */}
-        <div className="bg-bg-elevated flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-2xl border border-border-primary/50 shadow-inner mb-[14px]">
-          <img
-            src={
-              accentVariant === "default"
-                ? logo
-                : brandingLogos[accentVariant]
-            }
-            alt="Liner Logo"
-            width={44}
-            height={44}
-            className={
-              "h-[44px] w-[44px] " +
-              (accentVariant === "default" ||
-              accentVariant === "carbon" ||
-              accentVariant === "pixel" ||
-              accentVariant === "scanlines"
-                ? "theme-logo invert dark:invert-0"
-                : "")
-            }
-            draggable={false}
-          />
+        <div className="bg-bg-elevated flex h-[68px] w-[68px] shrink-0 items-center justify-center rounded-2xl border border-border-primary/50 shadow-inner mb-[14px] overflow-hidden">
+          {accentVariant === "default" ? (
+            <img
+              src={APP_ICONS[appIconStyle] || APP_ICONS.default}
+              alt="milomusic Logo"
+              width={56}
+              height={56}
+              className="h-[56px] w-[56px] rounded-xl object-cover"
+              draggable={false}
+            />
+          ) : (
+            <img
+              src={brandingLogos[accentVariant]}
+              alt="milomusic Logo"
+              width={44}
+              height={44}
+              className={
+                "h-[44px] w-[44px] " +
+                (accentVariant === "carbon" ||
+                accentVariant === "pixel" ||
+                accentVariant === "scanlines"
+                  ? "theme-logo invert dark:invert-0"
+                  : "")
+              }
+              draggable={false}
+            />
+          )}
         </div>
 
         {/* Title & Version badge */}

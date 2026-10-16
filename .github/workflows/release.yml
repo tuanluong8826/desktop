@@ -136,16 +136,16 @@ jobs:
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.38-enhanced' }}
-          name: "Liner v0.1.38 Enhanced (Vietnamese Music Fix + Edge Failover)"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v0.1.40-milomusic' }}
+          name: "milomusic v0.1.40 (Cross-Platform Audio, Karaoke & Custom Themes)"
           draft: false
           prerelease: false
           files: |
-            artifacts/linux-packages/*.AppImage
-            artifacts/linux-packages/*.deb
-            artifacts/windows-installer/*.exe
-            artifacts/macos-packages/*.dmg
-            artifacts/macos-packages/*.zip
+            artifacts/**/*.AppImage
+            artifacts/**/*.deb
+            artifacts/**/*.exe
+            artifacts/**/*.dmg
+            artifacts/**/*.zip
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

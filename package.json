@@ -8,7 +8,7 @@
     "name": "hkamori",
     "email": "dev@tryliner.fun"
   },
-  "desktopName": "liner",
+  "desktopName": "milomusic",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -25,13 +25,13 @@
   },
   "build": {
     "appId": "com.hkamori.liner",
-    "productName": "miloapi",
-    "executableName": "liner",
+    "productName": "milomusic",
+    "executableName": "milomusic",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "publish": [
       {
         "provider": "github",
-        "owner": "tryliner",
+        "owner": "tuanluong8826",
         "repo": "desktop"
       }
     ],
@@ -40,8 +40,9 @@
     },
     "protocols": [
       {
-        "name": "miloapi",
+        "name": "milomusic",
         "schemes": [
+          "milomusic",
           "liner",
           "miloapi"
         ]
@@ -52,9 +53,9 @@
       "dist-electron/**/*"
     ],
     "linux": {
-      "executableName": "liner",
+      "executableName": "milomusic",
       "syncDesktopName": true,
-      "maintainer": "hkamori <dev@tryliner.fun>",
+      "maintainer": "tuanluong8826 <luonggiatuan411@gmail.com>",
       "icon": "build/icons",
       "target": [
         "AppImage",
@@ -63,21 +64,21 @@
       "category": "Audio"
     },
     "deb": {
-      "packageName": "liner",
-      "artifactName": "liner_${version}_${arch}.${ext}"
+      "packageName": "milomusic",
+      "artifactName": "milomusic_${version}_${arch}.${ext}"
     },
     "appImage": {
-      "artifactName": "Liner-${version}.${ext}"
+      "artifactName": "milomusic-${version}.${ext}"
     },
     "win": {
-      "executableName": "liner",
+      "executableName": "milomusic",
       "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
-      "artifactName": "Liner-Setup-${version}.${ext}",
+      "artifactName": "milomusic-Setup-${version}.${ext}",
       "allowToChangeInstallationDirectory": true,
       "oneClick": false
     },

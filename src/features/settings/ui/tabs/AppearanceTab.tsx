@@ -5,6 +5,7 @@ import {
   type AccentVariant,
   type AppIconStyle,
 } from "@/features/player";
+import { APP_ICONS } from "@/features/player/hooks/useAppIconSync";
 import { useTranslation, LOCALE_OPTIONS } from "@/languages";
 import { Select } from "@/shared/ui";
 import {
@@ -68,39 +69,39 @@ const appIconOptions: {
 }[] = [
   {
     id: "default",
-    label: "Milo Web Music",
+    label: "milomusic",
     sublabel: "Tím Gradient",
-    src: "/icon.png",
+    src: APP_ICONS.default,
   },
   {
     id: "cyber",
     label: "Cyberpunk",
     sublabel: "Cyan & Blue",
-    src: "/icon-cyber.png",
+    src: APP_ICONS.cyber,
   },
   {
     id: "sunset",
     label: "Sunset Coral",
     sublabel: "Cam san hô",
-    src: "/icon-sunset.png",
+    src: APP_ICONS.sunset,
   },
   {
     id: "emerald",
     label: "Emerald",
     sublabel: "Xanh lục Spotify",
-    src: "/icon-emerald.png",
+    src: APP_ICONS.emerald,
   },
   {
     id: "gold",
     label: "Gold Vinyl",
     sublabel: "Đĩa than ánh vàng",
-    src: "/icon-gold.png",
+    src: APP_ICONS.gold,
   },
   {
     id: "minimal",
     label: "Minimal",
     sublabel: "Titanium tối giản",
-    src: "/icon-minimal.png",
+    src: APP_ICONS.minimal,
   },
 ];
 

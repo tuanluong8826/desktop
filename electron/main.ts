@@ -99,7 +99,7 @@ const MIN_WINDOW_HEIGHT = 705;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "miloapi",
+    title: "milomusic",
     icon: path.join(process.env.VITE_PUBLIC!, "icon.png"),
     width: DEFAULT_WINDOW_WIDTH,
     height: DEFAULT_WINDOW_HEIGHT,
@@ -233,8 +233,8 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
-    // register liner:// and miloapi:// so browsers / xdg-open route share links to us
-    for (const scheme of ["liner", "miloapi"]) {
+    // register milomusic://, liner:// and miloapi:// so browsers / xdg-open route share links to us
+    for (const scheme of ["milomusic", "liner", "miloapi"]) {
       if (process.defaultApp && process.argv.length >= 2) {
         app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1]!)]);
       } else {

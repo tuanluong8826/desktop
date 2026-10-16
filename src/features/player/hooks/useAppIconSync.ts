@@ -1,31 +1,46 @@
 import { useEffect } from "react";
 import { usePlayerStore, type AppIconStyle } from "../store/playerStore";
+import iconDefault from "@/assets/icons/icon-default.png";
+import iconCyber from "@/assets/icons/icon-cyber.png";
+import iconSunset from "@/assets/icons/icon-sunset.png";
+import iconEmerald from "@/assets/icons/icon-emerald.png";
+import iconGold from "@/assets/icons/icon-gold.png";
+import iconMinimal from "@/assets/icons/icon-minimal.png";
 
-const ICON_URLS: Record<AppIconStyle, string> = {
-  default: "/icon.png",
-  cyber: "/icon-cyber.png",
-  sunset: "/icon-sunset.png",
-  emerald: "/icon-emerald.png",
-  gold: "/icon-gold.png",
-  minimal: "/icon-minimal.png",
+export const APP_ICONS: Record<AppIconStyle, string> = {
+  default: iconDefault,
+  cyber: iconCyber,
+  sunset: iconSunset,
+  emerald: iconEmerald,
+  gold: iconGold,
+  minimal: iconMinimal,
 };
 
-async function loadIconDataUrl(url: string): Promise<string> {
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
+export async function loadIconDataUrl(url: string): Promise<string> {
+  if (url.startsWith("data:")) return url;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || 512;
+        canvas.height = img.naturalHeight || 512;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve("");
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch (err) {
+        reject(err);
+      }
+    };
     img.onerror = () => reject(new Error("Failed to load icon: " + url));
     img.src = url;
   });
-
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || 512;
-  canvas.height = img.naturalHeight || 512;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return "";
-  ctx.drawImage(img, 0, 0);
-  return canvas.toDataURL("image/png");
 }
 
 export function useAppIconSync() {
@@ -33,7 +48,7 @@ export function useAppIconSync() {
 
   useEffect(() => {
     let active = true;
-    const url = ICON_URLS[appIconStyle] || ICON_URLS.default;
+    const url = APP_ICONS[appIconStyle] || APP_ICONS.default;
 
     loadIconDataUrl(url)
       .then((dataUrl) => {

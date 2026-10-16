@@ -1,8 +1,10 @@
 <div align="center">
 
-# Liner
+# milomusic
 
-**Modern desktop music streaming player with syllable-synced lyrics and reactive dynamic visuals.**
+**Modern desktop music streaming player with syllable-synced karaoke lyrics, high-fidelity lossless audio, and reactive dynamic visuals.**
+
+*An enhanced personal build of [Liner](https://github.com/tryliner/desktop) by [tryliner](https://github.com/tryliner), tailored with custom theme icons, karaoke mic mode, now playing side drawer, and lossless streaming.*
 
 [![Electron](https://img.shields.io/badge/Electron-44.0-47848F?style=flat-square&logo=electron&logoColor=black&labelColor=white)](https://electronjs.org)
 [![React 19](https://img.shields.io/badge/React_19-19.2-61DAFB?style=flat-square&logo=react&logoColor=black&labelColor=white)](https://react.dev)

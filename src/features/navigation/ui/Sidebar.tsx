@@ -18,6 +18,7 @@ import vhsLogo from "@/assets/branding/logo-vhs.svg";
 import { useTranslation } from "@/languages";
 import { useTheme } from "next-themes";
 import { usePlayerStore, type AccentVariant } from "@/features/player";
+import { APP_ICONS } from "@/features/player/hooks/useAppIconSync";
 import { useModalStore } from "@/features/library";
 import { useCustomizationStore, getBlockStyle } from "@/features/settings";
 import { Tooltip } from "@/shared/ui";
@@ -47,6 +48,7 @@ function Sidebar({ searchOpen, onSearchToggle }: SidebarProps) {
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const accentVariant = usePlayerStore((state) => state.accentVariant);
+  const appIconStyle = usePlayerStore((state) => state.appIconStyle) || "default";
   const settingsOpen = useModalStore((state) => state.settingsOpen);
   const toggleSettings = useModalStore((state) => state.toggleSettings);
 
@@ -173,27 +175,34 @@ function Sidebar({ searchOpen, onSearchToggle }: SidebarProps) {
         style={sidebarStyle}
       >
         <div className="flex justify-center items-center pt-[16px] pb-[16px] shrink-0">
-
-          <AppImage
-            src={
-              accentVariant === "default"
-                ? logo
-                : brandingLogos[accentVariant]
-            }
-            alt="Logo"
-            width={34}
-            height={34}
-            className={
-              "w-[34px] h-[34px] " +
-              (accentVariant === "default" ||
-              accentVariant === "carbon" ||
-              accentVariant === "pixel" ||
-              accentVariant === "scanlines"
-                ? "theme-logo invert dark:invert-0"
-                : "")
-            }
-            draggable={false}
-          />
+          {accentVariant === "default" ? (
+            <img
+              src={APP_ICONS[appIconStyle] || APP_ICONS.default}
+              alt="milomusic"
+              width={34}
+              height={34}
+              className="w-[34px] h-[34px] rounded-xl object-cover shadow-sm select-none"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-[34px] h-[34px] rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center p-1.5 shadow-sm select-none">
+              <img
+                src={brandingLogos[accentVariant]}
+                alt="milomusic"
+                width={22}
+                height={22}
+                className={
+                  "w-[22px] h-[22px] object-contain " +
+                  (accentVariant === "carbon" ||
+                  accentVariant === "pixel" ||
+                  accentVariant === "scanlines"
+                    ? "theme-logo invert dark:invert-0"
+                    : "")
+                }
+                draggable={false}
+              />
+            </div>
+          )}
         </div>
 
         <nav className="relative flex-1 flex flex-col items-center gap-[24px] pt-[12px]">

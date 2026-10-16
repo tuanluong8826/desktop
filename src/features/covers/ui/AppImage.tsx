@@ -45,10 +45,11 @@ export default function AppImage({
   ...rest
 }: ImageProps) {
   const resolvedSrc = typeof src === "string" ? src : src?.src ?? "";
+  const isYoutubeLetterbox = typeof resolvedSrc === "string" && (resolvedSrc.includes("hqdefault") || resolvedSrc.includes("sddefault") || resolvedSrc.includes("default.jpg"));
   const [currentSrc, setCurrentSrc] = useState(resolvedSrc);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const [isLetterboxed, setIsLetterboxed] = useState(false);
+  const [isLetterboxed, setIsLetterboxed] = useState(isYoutubeLetterbox);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const checkLetterbox = useCallback(
@@ -63,10 +64,11 @@ export default function AppImage({
         // YouTube letterboxed video thumbnails (e.g. 480x360 or 640x480) have ratio 1.333 (4:3)
         // with 16:9 content centered with black bars on top and bottom.
         // Any aspect ratio >= 1.2 is non-square and letterboxed in square containers.
-        setIsLetterboxed(ratio >= 1.2);
+        const isYt = typeof resolvedSrc === "string" && (resolvedSrc.includes("hqdefault") || resolvedSrc.includes("sddefault"));
+        setIsLetterboxed(ratio >= 1.2 || isYt);
       }
     },
-    [autoCropLetterbox],
+    [autoCropLetterbox, resolvedSrc],
   );
 
   const loadedSrcRef = useRef<string | null>(null);
@@ -76,7 +78,8 @@ export default function AppImage({
     setCurrentSrc(resolvedSrc);
     setIsLoaded(false);
     setHasError(false);
-    setIsLetterboxed(false);
+    const isYt = typeof resolvedSrc === "string" && (resolvedSrc.includes("hqdefault") || resolvedSrc.includes("sddefault") || resolvedSrc.includes("default.jpg"));
+    setIsLetterboxed(isYt);
     loadedSrcRef.current = null;
   }, [resolvedSrc]);
 
@@ -130,7 +133,7 @@ export default function AppImage({
         height: height ? (typeof height === "number" ? `${height}px` : height) : undefined,
       };
 
-  const baseScale = isLetterboxed ? "scale(1.34)" : undefined;
+  const baseScale = isLetterboxed ? "scale(1.36)" : undefined;
   const combinedTransform = [baseScale, style?.transform].filter(Boolean).join(" ") || undefined;
 
   const imgStyle: CSSProperties = {
