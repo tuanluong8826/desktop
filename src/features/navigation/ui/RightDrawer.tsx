@@ -7,8 +7,9 @@ import { useTranslation } from "@/languages";
 import { useToast, ReorderDropPlaceholder, FloatingDragCard } from "@/shared/ui";
 import { useListReorder } from "@/shared/hooks";
 import { FiMusic } from "react-icons/fi";
-import { ArrowLeftLine } from "@mingcute/react";
+import { ArrowLeftLine, CloseLine } from "@mingcute/react";
 import { useTheme } from "next-themes";
+import NowPlayingInfoView from "@/features/player/ui/NowPlayingInfoView";
 import {
   useIsContentTransparent,
   useCustomizationStore,
@@ -190,8 +191,8 @@ const QueueList = memo(function QueueList({
 });
 
 export interface RightDrawerProps {
-  activeTab: "queue" | "lyrics";
-  onTabChange: (tab: "queue" | "lyrics") => void;
+  activeTab: "info" | "queue" | "lyrics";
+  onTabChange: (tab: "info" | "queue" | "lyrics") => void;
   onClose?: () => void;
 }
 
@@ -224,7 +225,7 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
   }, [drawerStyle]);
 
   const queueScrollRef = useRef<HTMLDivElement>(null);
-  const activeTabRef = useRef<"queue" | "lyrics">(activeTab);
+  const activeTabRef = useRef<"info" | "queue" | "lyrics">(activeTab);
 
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -232,9 +233,15 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
   const [queueLimit, setQueueLimit] = useState(() =>
     Math.max(50, Math.ceil(((player.currentIndex >= 0 ? player.currentIndex : 0) + 30) / 50) * 50),
   );
+  const [isInfoScrolled, setIsInfoScrolled] = useState(false);
   const [isQueueScrolled, setIsQueueScrolled] = useState(false);
   const [isLyricsScrolled, setIsLyricsScrolled] = useState(false);
-  const isScrolled = activeTab === "queue" ? isQueueScrolled : isLyricsScrolled;
+  const isScrolled =
+    activeTab === "info"
+      ? isInfoScrolled
+      : activeTab === "queue"
+        ? isQueueScrolled
+        : isLyricsScrolled;
 
   useEffect(() => {
     if (player.currentIndex >= 0) {
@@ -660,12 +667,19 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
 
   return (
     <div
-      className={`relative flex flex-col h-full w-full overflow-hidden select-none shadow-[-16px_0_36px_rgba(0,0,0,0.3)] ${
-        hasCustomBg
-          ? ""
-          : "bg-bg-primary"
+      className={`relative flex flex-col h-full w-full overflow-hidden select-none shadow-[-24px_0_48px_rgba(0,0,0,0.45)] border-l ${
+        isDark ? "border-white/10" : "border-black/10"
       }`}
-      style={drawerVarsStyle}
+      style={{
+        ...drawerVarsStyle,
+        background: hasCustomBg
+          ? undefined
+          : isDark
+            ? "rgba(16, 16, 20, 0.72)"
+            : "rgba(255, 255, 255, 0.78)",
+        backdropFilter: "blur(40px) saturate(190%)",
+        WebkitBackdropFilter: "blur(40px) saturate(190%)",
+      }}
     >
       {hasCustomBg && backgroundImage ? (
         <div
@@ -719,7 +733,7 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
                 className={`group inline-flex h-[32px] shrink-0 items-center gap-[6px] rounded-md px-[10px] active:scale-[0.94] transition-all cursor-pointer select-none pointer-events-auto text-[13px] font-[500] border-0 !border-none ${
                   hasCustomBg
                     ? "apple-glass-pill !border-none"
-                    : "bg-bg-panel/85 backdrop-blur-xl text-text-primary hover:bg-bg-panel border-0 !border-none"
+                    : "bg-white/[0.08] dark:bg-black/30 backdrop-blur-xl text-text-primary hover:bg-white/[0.12] dark:hover:bg-black/40 border border-white/10"
                 }`}
                 style={{ fontFamily: "var(--font-inter), sans-serif" }}
               >
@@ -731,41 +745,61 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
               </button>
             )}
           </div>
-          <div className="w-[120px] h-[32px] shrink-0" />
+          <div className="flex items-center gap-[6px] shrink-0">
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                title={t("common.close") || "Đóng"}
+                aria-label={t("common.close") || "Đóng"}
+                data-no-window-drag
+                className={`flex h-[32px] w-[32px] items-center justify-center rounded-lg transition-all active:scale-95 cursor-pointer pointer-events-auto border-0 ${
+                  hasCustomBg
+                    ? "apple-glass-pill"
+                    : "bg-white/[0.08] dark:bg-black/30 backdrop-blur-xl text-text-secondary hover:text-text-primary hover:bg-white/[0.14] dark:hover:bg-black/50 border border-white/10"
+                }`}
+              >
+                <CloseLine size={18} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="px-[16px] pb-[10px]">
           <div
-            className={`grid grid-cols-2 w-full items-center gap-[4px] rounded-xl p-[4px] ${
+            className={`grid grid-cols-3 w-full items-center gap-[4px] rounded-xl p-[4px] ${
               hasCustomBg
                 ? "apple-glass-pill"
-                : "bg-bg-elevated"
+                : isDark
+                  ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
+                  : "bg-black/[0.04] backdrop-blur-xl border border-black/10"
             }`}
           >
+            {/* 1. Info / Now Playing */}
             <button
               type="button"
-              onClick={() => onTabChange("queue")}
-              className={`relative inline-flex items-center justify-center rounded-lg px-[16px] py-[7px] text-[13px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
-                activeTab === "queue"
+              onClick={() => onTabChange("info")}
+              className={`relative inline-flex items-center justify-center rounded-lg px-[8px] py-[7px] text-[12.5px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
+                activeTab === "info"
                   ? hasCustomBg
                     ? "text-white dark:text-black font-semibold"
-                    : "text-text-primary"
+                    : "text-text-primary font-semibold"
                   : hasCustomBg
                     ? "text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white"
                     : "text-text-secondary hover:text-text-primary"
               }`}
               style={{
                 fontFamily: "var(--font-inter), sans-serif",
-                fontWeight: activeTab === "queue" ? 500 : 400,
+                fontWeight: activeTab === "info" ? 600 : 400,
               }}
             >
-              {activeTab === "queue" && (
+              {activeTab === "info" && (
                 <motion.div
                   layoutId="activeRightDrawerTab"
                   className={`absolute inset-0 rounded-lg ${
                     hasCustomBg
                       ? "apple-glass-prominent"
-                      : "bg-border-alpha-14"
+                      : "bg-white/15 dark:bg-white/10 backdrop-blur-md shadow-sm border border-white/10"
                   }`}
                   transition={{
                     type: "spring",
@@ -774,23 +808,25 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
                   }}
                 />
               )}
-              <span className="relative z-10">{t("player.queue")}</span>
+              <span className="relative z-10 truncate whitespace-nowrap">{t("player.now_playing") || "Đang phát"}</span>
             </button>
+
+            {/* 2. Lyrics */}
             <button
               type="button"
               onClick={() => onTabChange("lyrics")}
-              className={`relative inline-flex items-center justify-center rounded-lg px-[16px] py-[7px] text-[13px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
+              className={`relative inline-flex items-center justify-center rounded-lg px-[8px] py-[7px] text-[12.5px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
                 activeTab === "lyrics"
                   ? hasCustomBg
                     ? "text-white dark:text-black font-semibold"
-                    : "text-text-primary"
+                    : "text-text-primary font-semibold"
                   : hasCustomBg
                     ? "text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white"
                     : "text-text-secondary hover:text-text-primary"
               }`}
               style={{
                 fontFamily: "var(--font-inter), sans-serif",
-                fontWeight: activeTab === "lyrics" ? 500 : 400,
+                fontWeight: activeTab === "lyrics" ? 600 : 400,
               }}
             >
               {activeTab === "lyrics" && (
@@ -799,7 +835,7 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
                   className={`absolute inset-0 rounded-lg ${
                     hasCustomBg
                       ? "apple-glass-prominent"
-                      : "bg-border-alpha-14"
+                      : "bg-white/15 dark:bg-white/10 backdrop-blur-md shadow-sm border border-white/10"
                   }`}
                   transition={{
                     type: "spring",
@@ -808,13 +844,71 @@ function RightDrawer({ activeTab, onTabChange, onClose }: RightDrawerProps) {
                   }}
                 />
               )}
-              <span className="relative z-10">{t("player.lyrics")}</span>
+              <span className="relative z-10 truncate whitespace-nowrap">{t("player.lyrics") || "Lời bài hát"}</span>
+            </button>
+
+            {/* 3. Queue */}
+            <button
+              type="button"
+              onClick={() => onTabChange("queue")}
+              className={`relative inline-flex items-center justify-center rounded-lg px-[8px] py-[7px] text-[12.5px] leading-none transition-colors duration-150 border-0 bg-transparent cursor-pointer select-none active:scale-[0.97] ${
+                activeTab === "queue"
+                  ? hasCustomBg
+                    ? "text-white dark:text-black font-semibold"
+                    : "text-text-primary font-semibold"
+                  : hasCustomBg
+                    ? "text-black/70 dark:text-white/70 hover:text-black dark:hover:text-white"
+                    : "text-text-secondary hover:text-text-primary"
+              }`}
+              style={{
+                fontFamily: "var(--font-inter), sans-serif",
+                fontWeight: activeTab === "queue" ? 600 : 400,
+              }}
+            >
+              {activeTab === "queue" && (
+                <motion.div
+                  layoutId="activeRightDrawerTab"
+                  className={`absolute inset-0 rounded-lg ${
+                    hasCustomBg
+                      ? "apple-glass-prominent"
+                      : "bg-white/15 dark:bg-white/10 backdrop-blur-md shadow-sm border border-white/10"
+                  }`}
+                  transition={{
+                    type: "spring",
+                    stiffness: 450,
+                    damping: 35,
+                  }}
+                />
+              )}
+              <span className="relative z-10 truncate whitespace-nowrap">{t("player.queue") || "Danh sách chờ"}</span>
             </button>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-hidden relative z-10">
+        {activeTab === "info" && (
+          <div
+            className="absolute inset-0 overflow-y-auto"
+            onScroll={(e) => {
+              const target = e.currentTarget;
+              const next = target.scrollTop > 2;
+              setIsInfoScrolled((prev) => (prev === next ? prev : next));
+            }}
+          >
+            <NowPlayingInfoView
+              track={player.currentTrack}
+              nextTrack={
+                player.currentIndex >= 0 && player.currentIndex + 1 < player.queue.length
+                  ? player.queue[player.currentIndex + 1]
+                  : null
+              }
+              onOpenLyrics={() => onTabChange("lyrics")}
+              onOpenQueue={() => onTabChange("queue")}
+            />
+          </div>
+        )}
+
         {activeTab === "queue" && (
           <div
             ref={queueScrollCallbackRef}

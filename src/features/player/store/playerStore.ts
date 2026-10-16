@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Track } from "@/shared/types";
 import { debouncedStorage } from "@/shared/utils/storage";
+import { audioEnhancer } from "../engine/audioEnhancer";
 
 export { debouncedStorage };
 
@@ -25,6 +26,14 @@ export type AccentVariant =
   | "pixel"
   | "scanlines"
   | "vhs";
+
+export type AppIconStyle =
+  | "default"
+  | "cyber"
+  | "sunset"
+  | "emerald"
+  | "gold"
+  | "minimal";
 
 export interface TransportState {
   status: PlayerStatus;
@@ -52,6 +61,7 @@ export interface SessionState {
   audioQuality: AudioQuality;
   miniPlayerStyle: MiniPlayerStyle;
   accentVariant: AccentVariant;
+  appIconStyle: AppIconStyle;
   pauseOnDeviceChange: boolean;
   autoplaySimilar: boolean;
   trackDoubleClickBehavior: TrackDoubleClickBehavior;
@@ -65,6 +75,13 @@ export interface SessionState {
   isReverbEnabled: boolean;
   reverbLevel: number;
   discordRpcEnabled: boolean;
+  autoMixEnabled: boolean;
+  autoMixDurationSec: number;
+  autoMixDjFilter: boolean;
+  spatialAudioEnabled: boolean;
+  soundCheckEnabled: boolean;
+  appleDigitalMasterEnabled: boolean;
+  smartShuffle: boolean;
 }
 
 export type PlayerState = TransportState &
@@ -108,6 +125,7 @@ export interface PlayerStore extends PlayerState {
   setAudioQuality: (quality: AudioQuality) => void;
   setMiniPlayerStyle: (style: MiniPlayerStyle) => void;
   setAccentVariant: (variant: AccentVariant) => void;
+  setAppIconStyle: (style: AppIconStyle) => void;
   setPauseOnDeviceChange: (value: boolean) => void;
   setAutoplaySimilar: (value: boolean) => void;
   setTrackDoubleClickBehavior: (value: TrackDoubleClickBehavior) => void;
@@ -122,6 +140,13 @@ export interface PlayerStore extends PlayerState {
   setIsReverbEnabled: (enabled: boolean) => void;
   setReverbLevel: (level: number) => void;
   setDiscordRpcEnabled: (enabled: boolean) => void;
+  setAutoMixEnabled: (enabled: boolean) => void;
+  setAutoMixDurationSec: (durationSec: number) => void;
+  setAutoMixDjFilter: (enabled: boolean) => void;
+  setSpatialAudioEnabled: (enabled: boolean) => void;
+  setSoundCheckEnabled: (enabled: boolean) => void;
+  setAppleDigitalMasterEnabled: (enabled: boolean) => void;
+  setSmartShuffle: (enabled: boolean) => void;
   resetSpeedAndPitch: () => void;
   clearQueue: () => void;
 }
@@ -154,6 +179,7 @@ export const usePlayerStore = create<PlayerStore>()(
       audioQuality: "high",
       miniPlayerStyle: "default",
       accentVariant: "default",
+      appIconStyle: "default",
       pauseOnDeviceChange: true,
       autoplaySimilar: true,
       trackDoubleClickBehavior: "play",
@@ -167,6 +193,13 @@ export const usePlayerStore = create<PlayerStore>()(
       isReverbEnabled: false,
       reverbLevel: 0.35,
       discordRpcEnabled: true,
+      autoMixEnabled: true,
+      autoMixDurationSec: 6,
+      autoMixDjFilter: true,
+      spatialAudioEnabled: true,
+      soundCheckEnabled: true,
+      appleDigitalMasterEnabled: false,
+      smartShuffle: false,
 
       dispatch: () => {
         // Implementation injected by PlayerEngine
@@ -197,6 +230,8 @@ export const usePlayerStore = create<PlayerStore>()(
         set({ miniPlayerStyle }),
       setAccentVariant: (accentVariant: AccentVariant) =>
         set({ accentVariant }),
+      setAppIconStyle: (appIconStyle: AppIconStyle) =>
+        set({ appIconStyle }),
       setPauseOnDeviceChange: (pauseOnDeviceChange: boolean) =>
         set({ pauseOnDeviceChange }),
       setAutoplaySimilar: (autoplaySimilar: boolean) =>
@@ -225,6 +260,23 @@ export const usePlayerStore = create<PlayerStore>()(
           void window.linerElectron.setDiscordRpcEnabled(discordRpcEnabled);
         }
       },
+      setAutoMixEnabled: (autoMixEnabled: boolean) => set({ autoMixEnabled }),
+      setAutoMixDurationSec: (autoMixDurationSec: number) =>
+        set({ autoMixDurationSec: Math.max(1, Math.min(15, autoMixDurationSec)) }),
+      setAutoMixDjFilter: (autoMixDjFilter: boolean) => set({ autoMixDjFilter }),
+      setSpatialAudioEnabled: (spatialAudioEnabled: boolean) => {
+        set({ spatialAudioEnabled });
+        audioEnhancer.toggleSpatialAudio(spatialAudioEnabled);
+      },
+      setSoundCheckEnabled: (soundCheckEnabled: boolean) => {
+        set({ soundCheckEnabled });
+        audioEnhancer.toggleSoundCheck(soundCheckEnabled);
+      },
+      setAppleDigitalMasterEnabled: (appleDigitalMasterEnabled: boolean) => {
+        set({ appleDigitalMasterEnabled });
+        audioEnhancer.toggleAppleMaster(appleDigitalMasterEnabled);
+      },
+      setSmartShuffle: (smartShuffle: boolean) => set({ smartShuffle }),
       resetSpeedAndPitch: () => set({ playbackRate: 1, pitchSemitones: 0 }),
       clearQueue: () => {
         const state = get();
@@ -275,6 +327,17 @@ export const usePlayerStore = create<PlayerStore>()(
         if (state && !validVariants.includes(state.accentVariant)) {
           state.accentVariant = "default";
         }
+        const validIconStyles: AppIconStyle[] = [
+          "default",
+          "cyber",
+          "sunset",
+          "emerald",
+          "gold",
+          "minimal",
+        ];
+        if (state && !validIconStyles.includes(state.appIconStyle)) {
+          state.appIconStyle = "default";
+        }
         if (state) {
           if (typeof state.playbackRate !== "number" || isNaN(state.playbackRate)) {
             state.playbackRate = 1;
@@ -294,6 +357,30 @@ export const usePlayerStore = create<PlayerStore>()(
           if (typeof state.reverbLevel !== "number" || isNaN(state.reverbLevel)) {
             state.reverbLevel = 0.35;
           }
+          if (typeof state.autoMixEnabled !== "boolean") {
+            state.autoMixEnabled = true;
+          }
+          if (typeof state.autoMixDurationSec !== "number" || isNaN(state.autoMixDurationSec)) {
+            state.autoMixDurationSec = 6;
+          }
+          if (typeof state.autoMixDjFilter !== "boolean") {
+            state.autoMixDjFilter = true;
+          }
+          if (typeof state.spatialAudioEnabled !== "boolean") {
+            state.spatialAudioEnabled = true;
+          }
+          if (typeof state.soundCheckEnabled !== "boolean") {
+            state.soundCheckEnabled = true;
+          }
+          if (typeof state.appleDigitalMasterEnabled !== "boolean") {
+            state.appleDigitalMasterEnabled = false;
+          }
+          if (typeof state.smartShuffle !== "boolean") {
+            state.smartShuffle = false;
+          }
+          audioEnhancer.toggleSpatialAudio(state.spatialAudioEnabled);
+          audioEnhancer.toggleSoundCheck(state.soundCheckEnabled);
+          audioEnhancer.toggleAppleMaster(state.appleDigitalMasterEnabled);
         }
       },
       partialize: (state) => ({
@@ -315,6 +402,7 @@ export const usePlayerStore = create<PlayerStore>()(
         audioQuality: state.audioQuality,
         miniPlayerStyle: state.miniPlayerStyle,
         accentVariant: state.accentVariant,
+        appIconStyle: state.appIconStyle,
         pauseOnDeviceChange: state.pauseOnDeviceChange,
         autoplaySimilar: state.autoplaySimilar,
         trackDoubleClickBehavior: state.trackDoubleClickBehavior,
@@ -326,6 +414,13 @@ export const usePlayerStore = create<PlayerStore>()(
         isReverbEnabled: state.isReverbEnabled,
         reverbLevel: state.reverbLevel,
         discordRpcEnabled: state.discordRpcEnabled,
+        autoMixEnabled: state.autoMixEnabled,
+        autoMixDurationSec: state.autoMixDurationSec,
+        autoMixDjFilter: state.autoMixDjFilter,
+        spatialAudioEnabled: state.spatialAudioEnabled,
+        soundCheckEnabled: state.soundCheckEnabled,
+        appleDigitalMasterEnabled: state.appleDigitalMasterEnabled,
+        smartShuffle: state.smartShuffle,
         showLyrics: state.showLyrics,
       }),
     },

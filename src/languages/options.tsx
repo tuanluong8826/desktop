@@ -5,9 +5,29 @@ import type { Locale } from "./locale";
 // shared locale options used across auth-wall and settings modal
 export const LOCALE_OPTIONS: SelectOption<Locale>[] = [
   {
+    value: "vi",
+    label: "Tiếng Việt",
+    icon: <Emoji name="flag-vietnam" width={16} />,
+  },
+  {
     value: "en",
     label: "English",
     icon: <Emoji name="flag-united-kingdom" width={16} />,
+  },
+  {
+    value: "ja",
+    label: "日本語",
+    icon: <Emoji name="flag-japan" width={16} />,
+  },
+  {
+    value: "ko",
+    label: "한국어",
+    icon: <Emoji name="flag-south-korea" width={16} />,
+  },
+  {
+    value: "zh",
+    label: "中文",
+    icon: <Emoji name="flag-china" width={16} />,
   },
   {
     value: "ru",
@@ -18,5 +38,20 @@ export const LOCALE_OPTIONS: SelectOption<Locale>[] = [
     value: "uk",
     label: "Українська",
     icon: <Emoji name="flag-ukraine" width={16} />,
+  },
+  {
+    value: "es",
+    label: "Español",
+    icon: <Emoji name="flag-spain" width={16} />,
+  },
+  {
+    value: "fr",
+    label: "Français",
+    icon: <Emoji name="flag-france" width={16} />,
+  },
+  {
+    value: "de",
+    label: "Deutsch",
+    icon: <Emoji name="flag-germany" width={16} />,
   },
 ];

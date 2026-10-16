@@ -1,5 +1,5 @@
-// base url of the share-link redirector (local testing: http://localhost:1193)
-export const SHARE_BASE_URL = "https://link.tryliner.fun";
+// base url of the share-link redirector
+export const SHARE_BASE_URL = "https://miloapi.dev";
 
 export type ShareEntityType = "artist" | "album" | "playlist" | "track";
 

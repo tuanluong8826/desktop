@@ -761,10 +761,13 @@ export const api = {
     return request<ApiLikedTracksPage>(`/v1/me/library/tracks?${params}`);
   },
 
-  likeTrack(id: string): Promise<void> {
+  likeTrack(id: string, track?: any): Promise<void> {
     return request<void>(
       `/v1/me/library/tracks/${encodeURIComponent(id)}`,
-      { method: "PUT" },
+      {
+        method: "PUT",
+        ...(track ? { body: JSON.stringify({ track }) } : {}),
+      },
     );
   },
 

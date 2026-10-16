@@ -239,6 +239,7 @@ class PlayerEngine {
   private consecutiveAutoSkips = 0;
   private lastPreloadKey: string | null = null;
   private inFlightLyricsPrefetches = new Map<string, Promise<void>>();
+  private isAutoMixing = false;
 
   constructor() {
     usePlayerStore.setState({
@@ -251,6 +252,7 @@ class PlayerEngine {
         this.telemetry.onTrackCompleted(isRepeatOne);
       };
       playerRuntime.onError = (info) => this.handlePlaybackError(info);
+      playerRuntime.onAutoMixThreshold = () => this.handleAutoMixTrigger();
     }
 
     if (typeof window !== "undefined") {
@@ -391,6 +393,7 @@ class PlayerEngine {
             nextQueue.findIndex((item) => item.id === track.id),
           );
 
+    this.isAutoMixing = false;
     this.sessionId += 1;
     const mySession = this.sessionId;
     this.radioWaveId = newRadioWaveId();
@@ -592,6 +595,7 @@ class PlayerEngine {
   }
 
   public async skipNext(isAutoEnd: boolean = false): Promise<void> {
+    this.isAutoMixing = false;
     const store = usePlayerStore.getState();
     const nextIndex = this.computeNextIndex(isAutoEnd);
 
@@ -625,6 +629,7 @@ class PlayerEngine {
   }
 
   public async skipPrevious(): Promise<void> {
+    this.isAutoMixing = false;
     const store = usePlayerStore.getState();
     if (store.queue.length === 0) return;
 
@@ -751,6 +756,67 @@ class PlayerEngine {
         store.setQueue([...played, current, ...unshuffledUpcoming]);
         this.originalUpcomingQueue = [];
       }
+    }
+  }
+
+  public async activateSmartShuffle(): Promise<void> {
+    const store = usePlayerStore.getState();
+    store.setShuffle(true);
+    store.setSmartShuffle(true);
+
+    const currentTrack = store.currentTrack;
+    if (!currentTrack) return;
+
+    try {
+      const artistName =
+        typeof currentTrack.artists === "string"
+          ? currentTrack.artists
+          : (currentTrack.artists as any)?.[0]?.name || "";
+      let recommendedTracks: Track[] = [];
+
+      try {
+        const wave = await api.getWave();
+        if (wave.items && wave.items.length > 0) {
+          recommendedTracks = wave.items.map(toClientTrack);
+        }
+      } catch {}
+
+      if (recommendedTracks.length === 0 && artistName) {
+        const searchRes = await api.search(artistName);
+        if (searchRes.items && searchRes.items.length > 0) {
+          recommendedTracks = searchRes.items
+            .filter((i: any) => i.type === "track" && i.id !== currentTrack.id)
+            .map(toClientTrack);
+        }
+      }
+
+      if (recommendedTracks.length > 0) {
+        const existingIds = new Set(store.queue.map((t) => t.id));
+        const newTracks = recommendedTracks.filter((t) => !existingIds.has(t.id)).slice(0, 5);
+        if (newTracks.length > 0) {
+          const { queue, currentIndex } = store;
+          const played = queue.slice(0, currentIndex + 1);
+          const upcoming = queue.slice(currentIndex + 1);
+          const blended = shuffleArray([...upcoming, ...newTracks]);
+          store.setQueue([...played, ...blended]);
+          showToast("Đã kích hoạt Smart Shuffle (Trộn & đề xuất nhạc giống Spotify)", "info");
+        }
+      }
+    } catch (err) {
+      console.warn("Smart shuffle recommendation error:", err);
+    }
+  }
+
+  public cycleShuffleMode(): void {
+    const store = usePlayerStore.getState();
+    if (!store.shuffle && !store.smartShuffle) {
+      this.setShuffle(true);
+      store.setSmartShuffle(false);
+    } else if (store.shuffle && !store.smartShuffle) {
+      void this.activateSmartShuffle();
+    } else {
+      this.setShuffle(false);
+      store.setSmartShuffle(false);
     }
   }
 
@@ -931,6 +997,54 @@ class PlayerEngine {
     void this.skipNext(false);
   }
 
+  private handleAutoMixTrigger(): void {
+    if (this.isAutoMixing) return;
+    const store = usePlayerStore.getState();
+    if (!store.autoMixEnabled || store.status !== "playing" || store.repeat === "one") {
+      return;
+    }
+
+    const nextIndex = this.computeNextIndex(true);
+    if (nextIndex === null || nextIndex === store.currentIndex) {
+      return;
+    }
+
+    const nextTrack = store.queue[nextIndex];
+    if (!nextTrack) return;
+
+    this.isAutoMixing = true;
+    log(
+      "cyan",
+      "automix",
+      `initiating equal-power crossfade from "${store.currentTrack?.title}" to "${nextTrack.title}" (${store.autoMixDurationSec}s, djFilter=${store.autoMixDjFilter})`,
+    );
+
+    playerRuntime?.startCrossfade(
+      nextTrack,
+      store.autoMixDurationSec,
+      store.autoMixDjFilter,
+      () => {
+        this.isAutoMixing = false;
+        log("green", "automix", `crossfade to "${nextTrack.title}" completed`);
+        if (nextIndex === store.queue.length - 1) {
+          this.scheduleAppendSimilarTracks(this.sessionId, nextTrack.id);
+        }
+      },
+      () => {
+        this.isAutoMixing = false;
+        log("yellow", "automix", "crossfade failed, falling back to natural playback");
+      },
+    );
+
+    store.setCurrentTrack(nextTrack, nextIndex);
+    store.setPosition(0);
+    store.setDuration(nextTrack.durationMs ?? 0);
+    this.telemetry.startTrack(nextTrack, store.playbackContext);
+    void this.fetchLyricsForTrack(nextTrack);
+    this.preloadNextTrack(store);
+    void this.syncDiscordPresence(store);
+  }
+
   private computeNextIndex(isAutoEnd: boolean = false): number | null {
     const store = usePlayerStore.getState();
     const queueSize = store.queue.length;
@@ -1019,23 +1133,22 @@ class PlayerEngine {
     }
 
     const currentTrack = state.currentTrack;
-    if (!currentTrack || state.status === "idle" || state.status === "error") {
+    // Hide immediately from Discord if idle, error, or paused
+    if (!currentTrack || state.status === "idle" || state.status === "error" || state.status === "paused") {
       void window.linerElectron.setDiscordActivity(null);
       return;
     }
 
-    const isPaused = state.status === "paused";
     const artistName = currentTrack.artists || (currentTrack as any).artist || "Unknown Artist";
-    const albumName = typeof currentTrack.album === "object" ? currentTrack.album?.title : (currentTrack.album || undefined);
 
     const activity = {
       title: currentTrack.title || "Unknown Title",
       artist: artistName,
-      album: albumName,
+      album: undefined,
       coverUrl: currentTrack.coverUrl || undefined,
       durationMs: state.durationMs || currentTrack.durationMs || 0,
       positionMs: state.positionMs || 0,
-      paused: isPaused,
+      paused: false,
     };
 
     void window.linerElectron.setDiscordActivity(activity);

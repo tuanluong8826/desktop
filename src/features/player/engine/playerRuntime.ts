@@ -7,7 +7,9 @@ import type { Track } from "@/shared/types";
 import { pitchShifter } from "./pitchShifter";
 
 export class PlayerRuntime {
-  private audio: HTMLAudioElement;
+  private _audioA: HTMLAudioElement;
+  private _audioB: HTMLAudioElement;
+  private activeDeckId: "A" | "B" = "A";
   private currentTrackId: string | null = null;
   private loadEpoch = 0;
   private loadAbortController: AbortController | null = null;
@@ -24,38 +26,84 @@ export class PlayerRuntime {
   private backgroundCacheAbortController: AbortController | null = null;
   private currentSessionExpiresAt: number | null = null;
   private recoveryAttempts = 0;
+
+  // AutoMix state
+  public isCrossfading = false;
+  private crossfadeTimer: ReturnType<typeof setTimeout> | null = null;
+  private crossfadeStartTime = 0;
+  private crossfadeDurationMs = 0;
+  private crossfadeOutgoingDeck: "A" | "B" = "A";
+  private crossfadeIncomingDeck: "A" | "B" = "B";
+  private crossfadeAbortController: AbortController | null = null;
+  public onAutoMixThreshold?: () => void;
+
   public onEnded?: () => void;
   public onError?: (info: { trackId: string; message: string }) => void;
 
+  public get audio(): HTMLAudioElement {
+    return this.activeDeckId === "A" ? this._audioA : this._audioB;
+  }
+
+  public get otherAudio(): HTMLAudioElement {
+    return this.activeDeckId === "A" ? this._audioB : this._audioA;
+  }
+
+  public getActiveDeck(): "A" | "B" {
+    return this.activeDeckId;
+  }
+
   constructor() {
     const win = typeof window !== "undefined" ? (window as any) : null;
-    let audio = (win?.__liner_audio || (typeof document !== "undefined" && document.getElementById("liner-audio"))) as HTMLAudioElement | null;
-    if (!audio) {
-      audio = new Audio();
-      audio.id = "liner-audio";
-      audio.crossOrigin = "anonymous";
-      audio.preload = "auto";
+    let audioA = (win?.__liner_audio || (typeof document !== "undefined" && document.getElementById("liner-audio"))) as HTMLAudioElement | null;
+    if (!audioA) {
+      audioA = new Audio();
+      audioA.id = "liner-audio";
+      audioA.crossOrigin = "anonymous";
+      audioA.preload = "auto";
       if (typeof document !== "undefined") {
-        document.body.appendChild(audio);
+        document.body.appendChild(audioA);
       }
     }
     if (win) {
-      win.__liner_audio = audio;
+      win.__liner_audio = audioA;
     }
-    this.audio = audio;
-    this.setupAudioListeners(this.audio);
-    pitchShifter.attach(this.audio);
+    this._audioA = audioA;
+
+    let audioB = (win?.__liner_audio_b || (typeof document !== "undefined" && document.getElementById("liner-audio-b"))) as HTMLAudioElement | null;
+    if (!audioB) {
+      audioB = new Audio();
+      audioB.id = "liner-audio-b";
+      audioB.crossOrigin = "anonymous";
+      audioB.preload = "auto";
+      if (typeof document !== "undefined") {
+        document.body.appendChild(audioB);
+      }
+    }
+    if (win) {
+      win.__liner_audio_b = audioB;
+    }
+    this._audioB = audioB;
+
+    this.activeDeckId = "A";
+    this.setupAudioListeners(this._audioA, "A");
+    this.setupAudioListeners(this._audioB, "B");
+    pitchShifter.attachDeck(this._audioA, "A");
+    pitchShifter.attachDeck(this._audioB, "B");
 
     const initialVolume = usePlayerStore.getState().volume;
-    this.audio.volume = initialVolume;
+    this._audioA.volume = initialVolume;
+    this._audioB.volume = initialVolume;
     this.applyPlaybackRateAndPitch();
-    log("cyan", "boot", `volume ${initialVolume}`);
+    log("cyan", "boot", `dual deck audio initialized, volume ${initialVolume}`);
 
     usePlayerStore.subscribe((state, prevState) => {
       if (state.volume !== prevState.volume) {
         this.cancelFade();
-        if (!this.audio.paused) {
-          this.audio.volume = state.volume;
+        if (!this._audioA.paused) {
+          this._audioA.volume = state.volume;
+        }
+        if (!this._audioB.paused) {
+          this._audioB.volume = state.volume;
         }
       }
       if (
@@ -73,7 +121,7 @@ export class PlayerRuntime {
 
     this.setupDeviceChangeListener();
     this.setupMediaSession();
-    log("green", "boot", "player runtime initialized");
+    log("green", "boot", "player runtime initialized with AutoMix dual decks");
   }
 
   private setupDeviceChangeListener() {
@@ -155,7 +203,7 @@ export class PlayerRuntime {
     }
   }
 
-  private setupAudioListeners(audioEl: HTMLAudioElement) {
+  private setupAudioListeners(audioEl: HTMLAudioElement, deckId: "A" | "B") {
     audioEl.addEventListener("timeupdate", () => {
       if (this.isResetting || audioEl !== this.audio) return;
       if (!this.currentTrackId) return;
@@ -164,6 +212,27 @@ export class PlayerRuntime {
 
       const posMs = Math.round(audioEl.currentTime * 1000);
       usePlayerStore.getState().setPosition(posMs);
+
+      // Check AutoMix trigger threshold
+      if (!this.isCrossfading && !this.isResetting) {
+        const store = usePlayerStore.getState();
+        if (
+          store.autoMixEnabled &&
+          store.status === "playing" &&
+          store.repeat !== "one" &&
+          audioEl.duration > 0 &&
+          audioEl.currentTime > 0
+        ) {
+          const remainingSec = audioEl.duration - audioEl.currentTime;
+          const targetMixSec = Math.min(
+            store.autoMixDurationSec,
+            Math.max(2, audioEl.duration * 0.25),
+          );
+          if (remainingSec <= targetMixSec && remainingSec >= 0.5) {
+            this.onAutoMixThreshold?.();
+          }
+        }
+      }
     });
 
     audioEl.addEventListener("durationchange", () => {
@@ -176,7 +245,7 @@ export class PlayerRuntime {
 
     audioEl.addEventListener("waiting", () => {
       if (this.isResetting || audioEl !== this.audio) return;
-      log("yellow", "audio", "buffering (waiting)");
+      log("yellow", "audio", `buffering (waiting on deck ${deckId})`);
       this.stallStartTime = performance.now();
       if (usePlayerStore.getState().status === "playing") {
         usePlayerStore.getState().setStatus("loading");
@@ -185,6 +254,7 @@ export class PlayerRuntime {
 
     audioEl.addEventListener("ended", () => {
       if (this.isResetting || audioEl !== this.audio) return;
+      if (this.isCrossfading) return;
       if (!this.currentTrackId) return;
 
       // Ensure the track truly finished playing (not an empty media load or teardown artefact)
@@ -200,7 +270,7 @@ export class PlayerRuntime {
 
     audioEl.addEventListener("playing", () => {
       if (this.isResetting || audioEl !== this.audio) return;
-      log("green", "audio", "playing");
+      log("green", "audio", `playing on deck ${deckId}`);
       this.applyPlaybackRateAndPitch();
 
       if (this.stallStartTime !== null) {
@@ -223,7 +293,8 @@ export class PlayerRuntime {
 
     audioEl.addEventListener("pause", () => {
       if (this.isResetting || audioEl !== this.audio) return;
-      log("cyan", "audio", "paused");
+      if (this.isCrossfading) return;
+      log("cyan", "audio", `paused on deck ${deckId}`);
       const st = usePlayerStore.getState().status;
       if (st === "playing") {
         usePlayerStore.getState().setStatus("paused");
@@ -232,6 +303,7 @@ export class PlayerRuntime {
 
     audioEl.addEventListener("error", () => {
       if (this.isResetting || audioEl !== this.audio) return;
+      if (this.isCrossfading) return;
       if (!this.currentTrackId || !audioEl.src || audioEl.src === window.location.href) return;
 
       const message = audioEl.error?.message || "Audio playback error";
@@ -288,18 +360,23 @@ export class PlayerRuntime {
   }
 
   public applyPlaybackRateAndPitch(rate?: number, preservesPitch?: boolean): void {
-    if (!this.audio) return;
     const store = usePlayerStore.getState();
     const targetRate = rate ?? store.playbackRate ?? 1;
     const targetPreserves =
       preservesPitch ?? (store.isPitchLinked !== undefined ? !store.isPitchLinked : true);
 
     try {
-      this.audio.playbackRate = targetRate;
-      this.audio.defaultPlaybackRate = targetRate;
-      this.audio.preservesPitch = targetPreserves;
-      (this.audio as any).mozPreservesPitch = targetPreserves;
-      (this.audio as any).webkitPreservesPitch = targetPreserves;
+      this._audioA.playbackRate = targetRate;
+      this._audioA.defaultPlaybackRate = targetRate;
+      this._audioA.preservesPitch = targetPreserves;
+      (this._audioA as any).mozPreservesPitch = targetPreserves;
+      (this._audioA as any).webkitPreservesPitch = targetPreserves;
+
+      this._audioB.playbackRate = targetRate;
+      this._audioB.defaultPlaybackRate = targetRate;
+      this._audioB.preservesPitch = targetPreserves;
+      (this._audioB as any).mozPreservesPitch = targetPreserves;
+      (this._audioB as any).webkitPreservesPitch = targetPreserves;
     } catch {
       // Audio element not initialized or properties unsupported
     }
@@ -309,7 +386,8 @@ export class PlayerRuntime {
       const pitchSemitones = store.pitchSemitones ?? 0;
       const isReverbEnabled = store.isReverbEnabled ?? false;
       const reverbLevel = store.reverbLevel ?? 0.35;
-      pitchShifter.attach(this.audio);
+      pitchShifter.attachDeck(this._audioA, "A");
+      pitchShifter.attachDeck(this._audioB, "B");
       pitchShifter.update({
         pitchSemitones,
         isPitchLinked,
@@ -318,6 +396,212 @@ export class PlayerRuntime {
       });
     } catch (err) {
       console.error("[PlayerRuntime] applyPlaybackRateAndPitch error:", err);
+    }
+  }
+
+  public async startCrossfade(
+    track: Track,
+    durationSec: number = 6,
+    enableDjFilter: boolean = true,
+    onComplete?: () => void,
+    onError?: () => void,
+  ): Promise<void> {
+    if (this.isCrossfading) {
+      this.cancelCrossfade();
+    }
+
+    const outgoingDeck = this.activeDeckId;
+    const incomingDeck = outgoingDeck === "A" ? "B" : "A";
+    const outAudio = outgoingDeck === "A" ? this._audioA : this._audioB;
+    const inAudio = incomingDeck === "A" ? this._audioA : this._audioB;
+
+    this.isCrossfading = true;
+    this.crossfadeOutgoingDeck = outgoingDeck;
+    this.crossfadeIncomingDeck = incomingDeck;
+    this.crossfadeDurationMs = Math.max(1000, durationSec * 1000);
+
+    this.crossfadeAbortController?.abort();
+    const abortCtrl = new AbortController();
+    this.crossfadeAbortController = abortCtrl;
+
+    try {
+      let streamUrl: string | null = null;
+      let blobUrl: string | null = null;
+
+      const cached = await linerDb.getAudio(track.id);
+      if (cached && cached.blob && cached.blob.size > 10000) {
+        blobUrl = URL.createObjectURL(cached.blob);
+        streamUrl = blobUrl;
+      } else {
+        const nativeElectron = typeof window !== "undefined" ? (window as any).linerElectron : null;
+        if (nativeElectron?.resolveStream) {
+          try {
+            const nativeRes = await nativeElectron.resolveStream(track.id);
+            if (nativeRes?.streamUrl) {
+              streamUrl = nativeRes.streamUrl;
+            }
+          } catch {}
+        }
+        if (!streamUrl) {
+          const playableId = await this.resolvePlayableTrackId(track);
+          const session = await api.createPlaybackSession(playableId, undefined, abortCtrl.signal);
+          streamUrl = mediaUrl(session.streamUrl);
+        }
+      }
+
+      if (abortCtrl.signal.aborted || !this.isCrossfading) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return;
+      }
+
+      if (!streamUrl) {
+        throw new Error("Unable to resolve stream for crossfade");
+      }
+
+      inAudio.pause();
+      inAudio.src = streamUrl;
+      inAudio.currentTime = 0;
+      this.applyPlaybackRateAndPitch();
+
+      pitchShifter.setDeckGain(incomingDeck, 0.0, 0.001);
+      pitchShifter.setDeckGain(outgoingDeck, 1.0, 0.001);
+      pitchShifter.setDeckFilter(incomingDeck, 20, 0.001);
+      pitchShifter.setDeckFilter(outgoingDeck, 20, 0.001);
+
+      const masterVol = usePlayerStore.getState().volume;
+      inAudio.volume = masterVol;
+
+      if (inAudio.readyState < 2) {
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("Crossfade buffer timeout")), 4000);
+          const onCanPlay = () => {
+            clearTimeout(timer);
+            inAudio.removeEventListener("canplay", onCanPlay);
+            inAudio.removeEventListener("error", onErr);
+            resolve();
+          };
+          const onErr = () => {
+            clearTimeout(timer);
+            inAudio.removeEventListener("canplay", onCanPlay);
+            inAudio.removeEventListener("error", onErr);
+            reject(new Error("Crossfade audio error"));
+          };
+          inAudio.addEventListener("canplay", onCanPlay, { once: true });
+          inAudio.addEventListener("error", onErr, { once: true });
+        });
+      }
+
+      if (abortCtrl.signal.aborted || !this.isCrossfading) {
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+        return;
+      }
+
+      await inAudio.play();
+
+      // Hand over primary deck to incoming track
+      this.activeDeckId = incomingDeck;
+      this.currentTrackId = track.id;
+      if (typeof window !== "undefined") {
+        (window as any).__liner_audio = inAudio;
+        (window as any).__liner_audio_b = outAudio;
+      }
+      this._audioA.id = this.activeDeckId === "A" ? "liner-audio" : "liner-audio-b";
+      this._audioB.id = this.activeDeckId === "B" ? "liner-audio" : "liner-audio-b";
+      this.updateMediaSessionMetadata(track);
+
+      const startTime = performance.now();
+      this.crossfadeStartTime = startTime;
+
+      const tick = () => {
+        if (!this.isCrossfading || abortCtrl.signal.aborted) return;
+        const now = performance.now();
+        const elapsed = now - startTime;
+        const progress = Math.min(1.0, elapsed / this.crossfadeDurationMs);
+
+        // Equal-Power Crossfade curve
+        const vOut = Math.cos(progress * (Math.PI / 2));
+        const vIn = Math.sin(progress * (Math.PI / 2));
+
+        pitchShifter.setDeckGain(outgoingDeck, vOut, 0.016);
+        pitchShifter.setDeckGain(incomingDeck, vIn, 0.016);
+
+        // Spotify DJ Bass Ducking: sweep highpass from 20Hz up to 320Hz on outgoing track
+        if (enableDjFilter) {
+          const hpFreq = 20 + 300 * Math.pow(progress, 1.4);
+          pitchShifter.setDeckFilter(outgoingDeck, hpFreq, 0.016);
+          pitchShifter.setDeckFilter(incomingDeck, 20, 0.016);
+        }
+
+        if (progress < 1.0) {
+          this.crossfadeTimer = setTimeout(tick, 16);
+        } else {
+          this.isCrossfading = false;
+          this.crossfadeTimer = null;
+          pitchShifter.setDeckGain(incomingDeck, 1.0, 0.01);
+          pitchShifter.setDeckGain(outgoingDeck, 0.0, 0.01);
+          pitchShifter.setDeckFilter(outgoingDeck, 20, 0.01);
+          pitchShifter.setDeckFilter(incomingDeck, 20, 0.01);
+
+          try {
+            outAudio.pause();
+            outAudio.removeAttribute("src");
+            outAudio.load();
+          } catch {}
+
+          onComplete?.();
+        }
+      };
+
+      this.crossfadeTimer = setTimeout(tick, 16);
+    } catch (err) {
+      console.warn("[PlayerRuntime] AutoMix crossfade failed, aborting:", err);
+      this.isCrossfading = false;
+      pitchShifter.setDeckGain(outgoingDeck, 1.0, 0.01);
+      pitchShifter.setDeckGain(incomingDeck, 0.0, 0.01);
+      onError?.();
+    }
+  }
+
+  private async resolvePlayableTrackId(track: Track): Promise<string> {
+    if (track.id && !track.id.startsWith("itunes_song_") && /^[a-zA-Z0-9_-]{11}$/.test(track.id)) {
+      return track.id;
+    }
+    const artistName =
+      typeof track.artists === "string"
+        ? track.artists
+        : (track.artists as any)?.[0]?.name || "";
+    const query = `${artistName} ${track.title}`.trim();
+    try {
+      const searchRes = await api.search(query);
+      const match = searchRes.items?.find((item) => item.type === "track") || searchRes.items?.[0];
+      if (match?.id) {
+        return match.id;
+      }
+    } catch {}
+    return track.id;
+  }
+
+  public cancelCrossfade(): void {
+    if (this.crossfadeTimer) {
+      clearTimeout(this.crossfadeTimer);
+      this.crossfadeTimer = null;
+    }
+    this.crossfadeAbortController?.abort();
+    this.crossfadeAbortController = null;
+
+    if (this.isCrossfading) {
+      this.isCrossfading = false;
+      const outgoing = this.crossfadeOutgoingDeck === "A" ? this._audioA : this._audioB;
+      const incoming = this.crossfadeIncomingDeck === "A" ? this._audioA : this._audioB;
+      try {
+        outgoing.pause();
+        outgoing.removeAttribute("src");
+        outgoing.load();
+      } catch {}
+      pitchShifter.setDeckGain(this.crossfadeOutgoingDeck, 0.0, 0.01);
+      pitchShifter.setDeckFilter(this.crossfadeOutgoingDeck, 20, 0.01);
+      pitchShifter.setDeckGain(this.crossfadeIncomingDeck, 1.0, 0.01);
+      pitchShifter.setDeckFilter(this.crossfadeIncomingDeck, 20, 0.01);
     }
   }
 
@@ -498,6 +782,8 @@ export class PlayerRuntime {
   }
 
   public async loadAndPlay(track: Track, startPositionMs: number = 0) {
+    this.cancelCrossfade();
+    pitchShifter.resetDecks(this.activeDeckId);
     this.cancelFade();
     this.pendingStartPositionMs = startPositionMs;
     const epoch = ++this.loadEpoch;
@@ -620,8 +906,9 @@ export class PlayerRuntime {
       }
 
       if (!resolvedUrl) {
+        const playableId = await this.resolvePlayableTrackId(track);
         const session = await api.createPlaybackSession(
-          track.id,
+          playableId,
           undefined,
           controller.signal,
         );
@@ -781,6 +1068,16 @@ export class PlayerRuntime {
     usePlayerStore.getState().setStatus("paused");
     log("cyan", "audio", "pause requested (fading out)");
 
+    if (this.isCrossfading) {
+      if (this.crossfadeTimer) {
+        clearTimeout(this.crossfadeTimer);
+        this.crossfadeTimer = null;
+      }
+      this._audioA.pause();
+      this._audioB.pause();
+      return;
+    }
+
     this.fadeVolume(0, 180, () => {
       if (epoch !== this.loadEpoch) return;
       this.audio.pause();
@@ -797,6 +1094,12 @@ export class PlayerRuntime {
     pitchShifter.resumeContext();
     this.applyPlaybackRateAndPitch();
     log("cyan", "audio", "resume requested (fading in)");
+
+    if (this.isCrossfading) {
+      void this._audioA.play().catch(() => {});
+      void this._audioB.play().catch(() => {});
+      return;
+    }
 
     const currentTrack = usePlayerStore.getState().currentTrack;
     const isExpired =
@@ -851,6 +1154,9 @@ export class PlayerRuntime {
   }
 
   public seek(positionMs: number) {
+    if (this.isCrossfading) {
+      this.cancelCrossfade();
+    }
     if (!this.audio.src || this.audio.src === window.location.href) return;
     try {
       if (this.audio.readyState >= 1) {

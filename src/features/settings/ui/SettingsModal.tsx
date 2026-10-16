@@ -65,6 +65,7 @@ const SETTING_ITEMS: { tabId: TabId; titleKey: string; descKey?: string }[] = [
   { tabId: "Appearance", titleKey: "settings.language.label", descKey: "settings.language.description" },
   { tabId: "Appearance", titleKey: "settings.theme.title", descKey: "settings.theme.description" },
   { tabId: "Appearance", titleKey: "settings.branding.title", descKey: "settings.branding.description" },
+  { tabId: "Appearance", titleKey: "settings.app_icon.title", descKey: "settings.app_icon.description" },
 
   // Customization
   { tabId: "Customization", titleKey: "settings.customization.wallpaper_title", descKey: "settings.customization.wallpaper_description" },

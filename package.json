@@ -25,7 +25,7 @@
   },
   "build": {
     "appId": "com.hkamori.liner",
-    "productName": "Liner",
+    "productName": "miloapi",
     "executableName": "liner",
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "publish": [
@@ -40,9 +40,10 @@
     },
     "protocols": [
       {
-        "name": "Liner",
+        "name": "miloapi",
         "schemes": [
-          "liner"
+          "liner",
+          "miloapi"
         ]
       }
     ],

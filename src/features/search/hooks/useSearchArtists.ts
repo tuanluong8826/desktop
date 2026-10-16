@@ -35,11 +35,108 @@ export function useSearchArtists(
   const runRequest = useCallback(async (requestId: number, q: string) => {
     setLoading(true);
     try {
-      const res = await api.search(q, "artist");
+      const qLower = q.toLowerCase();
+
+      // Run Liner search and iTunes artist search in parallel
+      const [linerRes, itunesRes] = await Promise.allSettled([
+        api.search(q, "all"),
+        fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(
+            q,
+          )}&entity=musicArtist&limit=10`,
+        ).then((r) => (r.ok ? r.json() : null)),
+      ]);
+
       if (requestId !== latestRequestIdRef.current) return;
-      setArtists(
-        res.items.filter((it): it is ApiArtist => it.type === "artist"),
-      );
+
+      const artistMap = new Map<string, ApiArtist>();
+
+      // 1. Process Liner results (extract from tracks and explicit artist items)
+      if (linerRes.status === "fulfilled" && Array.isArray(linerRes.value?.items)) {
+        for (const item of linerRes.value.items) {
+          if (item.type === "artist") {
+            const raw = item as ApiArtist;
+            const key = (raw.name || "").toLowerCase().trim();
+            if (key && key !== "artist" && key !== "unknown") {
+              artistMap.set(key, raw);
+            }
+            continue;
+          }
+
+          // From track item
+          const track = item as any;
+          const list = track.artists || track.artistList || [];
+          if (Array.isArray(list)) {
+            for (const a of list) {
+              const aName = typeof a === "string" ? a.trim() : (a.name || "").trim();
+              const aId = typeof a === "string" ? "" : (a.id || "").trim();
+              if (!aName || aName.toLowerCase() === "artist" || aName.toLowerCase() === "unknown") {
+                continue;
+              }
+              const normKey = aName.toLowerCase();
+              const trackCover = track.cover?.url
+                ? track.cover
+                : track.coverUrl
+                  ? { url: track.coverUrl }
+                  : undefined;
+
+              const existing = artistMap.get(normKey);
+              if (!existing) {
+                artistMap.set(normKey, {
+                  type: "artist",
+                  id: aId || aName,
+                  name: aName,
+                  cover: trackCover,
+                });
+              } else if (aId && aId.startsWith("UC") && !existing.id.startsWith("UC")) {
+                existing.id = aId;
+                if (!existing.cover && trackCover) existing.cover = trackCover;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Process iTunes results
+      if (itunesRes.status === "fulfilled" && itunesRes.value?.results) {
+        for (const it of itunesRes.value.results) {
+          const aName = (it.artistName || "").trim();
+          if (!aName) continue;
+          const normKey = aName.toLowerCase();
+          if (!artistMap.has(normKey)) {
+            artistMap.set(normKey, {
+              type: "artist",
+              id: aName,
+              name: aName,
+            });
+          }
+        }
+      }
+
+      // 3. Score and sort artists by relevancy to query
+      const sortedArtists = Array.from(artistMap.values()).sort((a, b) => {
+        const aNameLower = a.name.toLowerCase();
+        const bNameLower = b.name.toLowerCase();
+
+        const aExact = aNameLower === qLower;
+        const bExact = bNameLower === qLower;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        const aStarts = aNameLower.startsWith(qLower);
+        const bStarts = bNameLower.startsWith(qLower);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        const aHasUC = a.id.startsWith("UC");
+        const bHasUC = b.id.startsWith("UC");
+        if (aHasUC && !bHasUC) return -1;
+        if (!aHasUC && bHasUC) return 1;
+
+        return a.name.localeCompare(b.name);
+      });
+
+      setArtists(sortedArtists);
       setError(null);
       setPartialWarning(undefined);
       lastFetchedQueryRef.current = q;

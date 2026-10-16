@@ -374,31 +374,38 @@ export function FullscreenPlayer({
 
       <div className="absolute inset-0 z-[1] bg-black/40" />
 
-      <div className="absolute inset-0 z-10 flex">
-        <div
-          className={`h-full flex flex-col items-center justify-center transition-all duration-300 ease-out ${
-            showLyrics ? "flex-1" : "w-full"
+      <div className="absolute inset-0 z-10 flex overflow-hidden">
+        <motion.div
+          layout
+          transition={{ duration: 0.38, ease: [0.25, 1, 0.5, 1] }}
+          className={`h-full flex flex-col items-center justify-center shrink-0 ${
+            showLyrics ? "w-1/2" : "w-full"
           }`}
         >
-          <div className="flex flex-col items-center justify-center gap-5">
+          <motion.div
+            layout
+            transition={{ duration: 0.38, ease: [0.25, 1, 0.5, 1] }}
+            className="flex flex-col items-center justify-center gap-5"
+          >
             <PlayerUiElements
               onClose={onClose}
               showLyrics={showLyrics}
               onToggleLyrics={toggleLyrics}
               isCentered={!showLyrics}
             />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         <AnimatePresence>
           {showLyrics && (
             <motion.div
               key="fullscreen-lyrics-pane"
-              initial={{ opacity: 0, x: 25 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 25 }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="flex-1 h-full min-h-0 pl-2 pr-6 flex flex-col relative"
+              layout
+              initial={{ opacity: 0, x: 40, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 40, scale: 0.96 }}
+              transition={{ duration: 0.38, ease: [0.25, 1, 0.5, 1] }}
+              className="w-1/2 h-full min-h-0 pl-2 pr-6 flex flex-col relative"
             >
               {showProviderIsland && (
                 <div className="absolute top-[12px] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex justify-center">

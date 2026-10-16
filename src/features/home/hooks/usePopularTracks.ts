@@ -158,6 +158,8 @@ export function usePopular(limit = 50) {
       .then((res) => {
         if (!active) return;
         const artistMap = new Map<string, PopularArtistItem>();
+        const albumMap = new Map<string, PopularAlbumItem>();
+
         for (const entry of (res.items as any[]) || []) {
           const rawTrack = entry.track || entry;
           const track = toClientTrack(rawTrack);
@@ -179,14 +181,33 @@ export function usePopular(limit = 50) {
               totalTracks: 1,
             });
           }
+
+          const albumId = track.album?.id || `alb_${track.id}`;
+          const albumTitle = track.album?.title || `${track.title} (Single)`;
+          if (!albumMap.has(albumId) && albumMap.size < 12) {
+            albumMap.set(albumId, {
+              id: albumId,
+              title: albumTitle,
+              artist: artistName,
+              coverUrl: track.coverUrl,
+              totalTracks: 1,
+              albumType: "Single",
+            });
+          }
         }
-        const items: PopularItem[] = Array.from(artistMap.values()).map(
-          (artist) => ({
-            type: "artist",
+
+        const items: PopularItem[] = [
+          ...Array.from(artistMap.values()).map((artist) => ({
+            type: "artist" as const,
             item: artist,
             playCount: artist.totalListens,
-          }),
-        );
+          })),
+          ...Array.from(albumMap.values()).map((album) => ({
+            type: "album" as const,
+            item: album,
+            playCount: 150000,
+          })),
+        ];
         cache.set(`popular_${limit}`, { data: items, timestamp: Date.now() });
         setData(items);
       })

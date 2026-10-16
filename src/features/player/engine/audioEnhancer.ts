@@ -37,7 +37,8 @@ export type EqPresetName =
   | "pop"
   | "acoustic"
   | "lofi"
-  | "spatial_clarity";
+  | "spatial_clarity"
+  | "apple_master";
 
 export const EQ_PRESETS: Record<EqPresetName, { name: string; gains: number[] }> = {
   flat: {
@@ -80,6 +81,10 @@ export const EQ_PRESETS: Record<EqPresetName, { name: string; gains: number[] }>
     name: "3D Air & Spatial Presence",
     gains: [2, 1, 0, 0, 1, 2, 3, 5, 6, 7],
   },
+  apple_master: {
+    name: "Apple Digital Master (Hi-Res Lossless)",
+    gains: [2.5, 2.0, 1.0, 0.0, 0.5, 1.0, 1.8, 2.5, 3.2, 3.8],
+  },
 };
 
 export interface AudioEnhancementConfig {
@@ -87,6 +92,9 @@ export interface AudioEnhancementConfig {
   eqGains: number[];
   bassBoostLevel: number; // 0 to 1
   spatialWidth: number; // 0 (mono) to 1 (normal) to 2 (extra wide)
+  spatialAudioEnabled: boolean;
+  soundCheckEnabled: boolean;
+  appleMasterEnabled: boolean;
   compressorEnabled: boolean;
   limiterEnabled: boolean;
 }
@@ -101,15 +109,22 @@ export class AudioEnhancer {
   private bassFilter: BiquadFilterNode | null = null;
   private bassGain: GainNode | null = null;
 
-  // Dynamics & Peak Limiter
+  // Dynamics & Peak Limiter (Apple Sound Check)
   private compressor: DynamicsCompressorNode | null = null;
   private limiter: DynamicsCompressorNode | null = null;
+
+  // Apple Spatial Audio 3D nodes
+  private spatialDryGain: GainNode | null = null;
+  private spatialWetGain: GainNode | null = null;
 
   private config: AudioEnhancementConfig = {
     eqEnabled: true,
     eqGains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     bassBoostLevel: 0,
     spatialWidth: 1,
+    spatialAudioEnabled: false,
+    soundCheckEnabled: false,
+    appleMasterEnabled: false,
     compressorEnabled: true,
     limiterEnabled: true,
   };
@@ -152,7 +167,7 @@ export class AudioEnhancer {
     this.limiter.release.value = 0.05;
 
     // Connect chain:
-    // Input -> EQ filters (chained) -> Bass Filter -> Compressor -> Limiter -> Output
+    // Input -> EQ filters (chained) -> Bass Filter -> Compressor -> Limiter -> Spatial Stage -> Output
     let currentNode: AudioNode = this.input;
 
     for (const filter of this.eqFilters) {
@@ -165,7 +180,45 @@ export class AudioEnhancer {
 
     currentNode.connect(this.compressor);
     this.compressor.connect(this.limiter);
-    this.limiter.connect(this.output);
+
+    // 5. Apple Spatial Audio 3D Stage (Binaural Cross-talk Decorrelation & Stereo Widening)
+    this.spatialDryGain = ctx.createGain();
+    this.spatialDryGain.gain.value = this.config.spatialAudioEnabled ? 0.45 : 1.0;
+
+    this.spatialWetGain = ctx.createGain();
+    this.spatialWetGain.gain.value = this.config.spatialAudioEnabled ? 0.85 : 0.0;
+
+    const splitter = ctx.createChannelSplitter(2);
+    const merger = ctx.createChannelMerger(2);
+
+    const invL = ctx.createGain();
+    invL.gain.value = -0.32;
+    const invR = ctx.createGain();
+    invR.gain.value = -0.32;
+
+    const delayL = ctx.createDelay();
+    delayL.delayTime.value = 0.008; // 8ms Haas spatial delay
+    const delayR = ctx.createDelay();
+    delayR.delayTime.value = 0.008;
+
+    splitter.connect(delayL, 0);
+    splitter.connect(delayR, 1);
+
+    delayL.connect(invL);
+    delayR.connect(invR);
+
+    splitter.connect(merger, 0, 0);
+    splitter.connect(merger, 1, 1);
+
+    invR.connect(merger, 0, 0); // cross into left
+    invL.connect(merger, 0, 1); // cross into right
+
+    this.limiter.connect(this.spatialDryGain);
+    this.spatialDryGain.connect(this.output);
+
+    this.limiter.connect(splitter);
+    merger.connect(this.spatialWetGain);
+    this.spatialWetGain.connect(this.output);
 
     this.applyConfig();
 
@@ -210,12 +263,40 @@ export class AudioEnhancer {
   public toggleCompressor(enabled: boolean): void {
     this.config.compressorEnabled = enabled;
     if (this.compressor && this.ctx) {
-      // If disabled, set ratio to 1.0 (pass-through)
       this.compressor.ratio.setTargetAtTime(
         enabled ? 3.5 : 1.0,
         this.ctx.currentTime,
         0.05
       );
+    }
+  }
+
+  public toggleSpatialAudio(enabled: boolean): void {
+    this.config.spatialAudioEnabled = enabled;
+    if (this.spatialDryGain && this.spatialWetGain && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.spatialDryGain.gain.setTargetAtTime(enabled ? 0.45 : 1.0, now, 0.03);
+      this.spatialWetGain.gain.setTargetAtTime(enabled ? 0.85 : 0.0, now, 0.03);
+    }
+  }
+
+  public toggleSoundCheck(enabled: boolean): void {
+    this.config.soundCheckEnabled = enabled;
+    if (this.compressor && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.compressor.threshold.setTargetAtTime(enabled ? -22 : -18, now, 0.05);
+      this.compressor.ratio.setTargetAtTime(enabled ? 4.5 : 3.5, now, 0.05);
+      this.compressor.attack.setTargetAtTime(enabled ? 0.008 : 0.005, now, 0.05);
+      this.compressor.release.setTargetAtTime(enabled ? 0.22 : 0.15, now, 0.05);
+    }
+  }
+
+  public toggleAppleMaster(enabled: boolean): void {
+    this.config.appleMasterEnabled = enabled;
+    if (enabled) {
+      this.applyPreset("apple_master");
+    } else {
+      this.applyPreset("flat");
     }
   }
 
@@ -226,6 +307,8 @@ export class AudioEnhancer {
       filter.gain.setTargetAtTime(targetGain, this.ctx!.currentTime, 0.05);
     });
     this.setBassBoost(this.config.bassBoostLevel);
+    this.toggleSpatialAudio(this.config.spatialAudioEnabled);
+    this.toggleSoundCheck(this.config.soundCheckEnabled);
   }
 
   public getConfig(): AudioEnhancementConfig {

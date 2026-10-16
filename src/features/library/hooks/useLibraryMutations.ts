@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { api } from "@/shared/api";
 import { notifyLibraryChanged, evictPlaylistFromCache } from "./usePlaylists";
 import { applyOptimisticLike, applyOptimisticUnlike } from "./useLikedTracks";
+import type { Track } from "@/shared/types";
 
 type Options = {
   onSuccess?: (...args: any[]) => void;
@@ -117,19 +118,24 @@ export function useRemoveExternalItem() {
   );
 }
 
-type TrackMutationInput = string | { trackId: string; [key: string]: unknown };
+type TrackMutationInput =
+  | string
+  | Track
+  | { id?: string; trackId?: string; [key: string]: any };
+
 const trackIdFrom = (input: TrackMutationInput) =>
-  typeof input === "string" ? input : input.trackId;
+  typeof input === "string" ? input : ((input as any).id || (input as any).trackId || "");
 
 export function useLikeTrack() {
   const [isPending, setIsPending] = useState(false);
 
   const mutateAsync = useCallback(async (input: TrackMutationInput) => {
     const trackId = trackIdFrom(input);
+    const trackData = typeof input === "object" ? input : undefined;
     setIsPending(true);
     const rollback = applyOptimisticLike(trackId);
     try {
-      const result = await api.likeTrack(trackId);
+      const result = await api.likeTrack(trackId, trackData);
       notifyLibraryChanged();
       return result;
     } catch (err) {

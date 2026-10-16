@@ -1,6 +1,7 @@
 // liner:// deeplink parsing, shared by main process (no electron imports here
 // so vitest can cover it). same strict allowlist as the link server: fixed
 // entity types, opaque catalog tokens only.
+export const DEEP_LINK_SCHEMES = ["liner", "miloapi"] as const;
 export const DEEP_LINK_SCHEME = "liner";
 
 const DEEP_LINK_IDS: Record<string, RegExp> = {
@@ -27,7 +28,8 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
   } catch {
     return null;
   }
-  if (url.protocol !== `${DEEP_LINK_SCHEME}:`) return null;
+  const protocol = url.protocol.replace(/:$/, "").toLowerCase();
+  if (!DEEP_LINK_SCHEMES.includes(protocol as (typeof DEEP_LINK_SCHEMES)[number])) return null;
   const type = url.hostname.toLowerCase();
   const pattern = DEEP_LINK_IDS[type];
   if (!pattern) return null;
@@ -40,5 +42,5 @@ export function parseDeeplink(raw: string): DeeplinkTarget | null {
 }
 
 export function findDeeplinkArg(argv: string[]): string | undefined {
-  return argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));
+  return argv.find((arg) => DEEP_LINK_SCHEMES.some((scheme) => arg.startsWith(`${scheme}://`)));
 }

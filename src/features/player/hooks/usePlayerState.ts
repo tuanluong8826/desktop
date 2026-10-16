@@ -18,6 +18,7 @@ const EMPTY_STATE: PlayerState = {
   audioQuality: "high",
   miniPlayerStyle: "default",
   accentVariant: "default",
+  appIconStyle: "default",
   pauseOnDeviceChange: true,
   autoplaySimilar: true,
   trackDoubleClickBehavior: "play",
@@ -31,6 +32,13 @@ const EMPTY_STATE: PlayerState = {
   isReverbEnabled: false,
   reverbLevel: 0.35,
   discordRpcEnabled: true,
+  autoMixEnabled: true,
+  autoMixDurationSec: 6,
+  autoMixDjFilter: true,
+  spatialAudioEnabled: true,
+  soundCheckEnabled: true,
+  appleDigitalMasterEnabled: false,
+  smartShuffle: false,
 };
 
 export function usePlayerState(): PlayerState {

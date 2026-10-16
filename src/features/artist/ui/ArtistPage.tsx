@@ -58,8 +58,9 @@ function ArtistContent() {
   const hasCustomBg = useIsContentTransparent();
   const [searchParams] = useSearchParams();
   const id = searchParams.get("id");
+  const nameParam = searchParams.get("name");
 
-  const { data, loading } = useArtist(id);
+  const { data, loading } = useArtist(id, nameParam);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [imagesLoaded, setImagesLoaded] = useState(false);
@@ -77,6 +78,7 @@ function ArtistContent() {
   const urlsToPreload = useMemo(() => {
     if (!data) return [];
     const urls = new Set<string>();
+    if (data.bannerUrl) urls.add(data.bannerUrl);
     if (data.coverUrl) urls.add(data.coverUrl);
     for (const track of data.tracks.slice(0, 8)) {
       if (track.coverUrl) urls.add(track.coverUrl);
@@ -253,24 +255,25 @@ function ArtistContent() {
           {isReady && data && (
             <div className="col-start-1 row-start-1 w-full pb-[32px]">
               <div className="relative w-full min-h-[340px] md:min-h-[380px] flex flex-col justify-between overflow-hidden">
-                {data.coverUrl ? (
+                {(data.bannerUrl || data.coverUrl) ? (
                   <div
                     className="absolute inset-0 z-0 overflow-hidden pointer-events-none"
                     style={{
                       maskImage:
-                        "linear-gradient(to bottom, black 0%, black 35%, transparent 100%)",
+                        "linear-gradient(to bottom, black 0%, black 45%, transparent 100%)",
                       WebkitMaskImage:
-                        "linear-gradient(to bottom, black 0%, black 35%, transparent 100%)",
+                        "linear-gradient(to bottom, black 0%, black 45%, transparent 100%)",
                     }}
                   >
                     <CoverImage
-                      src={data.coverUrl}
+                      src={data.bannerUrl || data.coverUrl}
                       alt={data.title}
                       fill
                       sizes="100vw"
-                      className="object-cover object-center"
+                      className="object-cover object-center scale-105 blur-[2px] brightness-[0.65]"
                       draggable={false}
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-bg-primary via-bg-primary/40 to-transparent" />
                   </div>
                 ) : (
                   <div
@@ -284,35 +287,48 @@ function ArtistContent() {
                   />
                 )}
 
-
                 <div className="relative z-10 px-[32px] pt-[56px]" data-window-drag />
 
-              <div className="relative z-10 px-[32px] pb-[20px] flex flex-col md:flex-row items-start md:items-end justify-between gap-[24px]">
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-[8px] md:gap-[10px]">
-                    <h1
-                      className="m-0 text-[38px] md:text-[48px] font-[700] tracking-[-0.03em] leading-[1.05] text-text-primary"
-                      style={{
-                        fontFamily: "var(--font-inter), sans-serif",
-                      }}
-                    >
-                      {data.title}
-                    </h1>
-                    {data.verified ? (
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-[24px] w-[24px] md:h-[32px] md:w-[32px] shrink-0 translate-y-[2px] md:translate-y-[3px] text-[#1d9bf0]"
-                        fill="currentColor"
-                        aria-label="Verified"
-                      >
-                        <path d="M10.007 2.10377C8.60544 1.65006 7.08181 2.28116 6.41156 3.59306L5.60578 5.17023C5.51004 5.35763 5.35763 5.51004 5.17023 5.60578L3.59306 6.41156C2.28116 7.08181 1.65006 8.60544 2.10377 10.007L2.64923 11.692C2.71404 11.8922 2.71404 12.1078 2.64923 12.308L2.10377 13.993C1.65006 15.3946 2.28116 16.9182 3.59306 17.5885L5.17023 18.3942C5.35763 18.49 5.51004 18.6424 5.60578 18.8298L6.41156 20.407C7.08181 21.7189 8.60544 22.35 10.007 21.8963L11.692 21.3508C11.8922 21.286 12.1078 21.286 12.308 21.3508L13.993 21.8963C15.3946 22.35 16.9182 21.7189 17.5885 20.407L18.3942 18.8298C18.49 18.6424 18.6424 18.49 18.8298 18.3942L20.407 17.5885C21.7189 16.9182 22.35 15.3946 21.8963 13.993L21.3508 12.308C21.286 12.1078 21.286 11.8922 21.3508 11.692L21.8963 10.007C22.35 8.60544 21.7189 7.08181 20.407 6.41156L18.8298 5.60578C18.6424 5.51004 18.49 5.35763 18.3942 5.17023L17.5885 3.59306C16.9182 2.28116 15.3946 1.65006 13.993 2.10377L12.308 2.64923C12.1078 2.71403 11.8922 2.71404 11.692 2.64923L10.007 2.10377Z" />
-                        <path
-                          d="M6.75977 11.7573L8.17399 10.343L11.0024 13.1715L16.6593 7.51465L18.0735 8.92886L11.0024 15.9999L6.75977 11.7573Z"
-                          fill="#ffffff"
+                <div className="relative z-10 px-[32px] pb-[20px] flex flex-col md:flex-row items-start md:items-end justify-between gap-[24px]">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-[20px] md:gap-[28px] min-w-0">
+                    {data.coverUrl ? (
+                      <div className="relative h-[100px] w-[100px] md:h-[130px] md:w-[130px] shrink-0 overflow-hidden rounded-full ring-4 ring-white/10 shadow-2xl bg-white/5">
+                        <CoverImage
+                          src={data.coverUrl}
+                          alt={data.title}
+                          fill
+                          sizes="130px"
+                          className="object-cover"
+                          draggable={false}
                         />
-                      </svg>
+                      </div>
                     ) : null}
-                  </div>
+
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-[8px] md:gap-[10px]">
+                        <h1
+                          className="m-0 text-[36px] md:text-[46px] font-[700] tracking-[-0.03em] leading-[1.08] text-text-primary"
+                          style={{
+                            fontFamily: "var(--font-inter), sans-serif",
+                          }}
+                        >
+                          {data.title}
+                        </h1>
+                        {data.verified ? (
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-[24px] w-[24px] md:h-[30px] md:w-[30px] shrink-0 translate-y-[2px] md:translate-y-[3px] text-[#1d9bf0]"
+                            fill="currentColor"
+                            aria-label="Verified"
+                          >
+                            <path d="M10.007 2.10377C8.60544 1.65006 7.08181 2.28116 6.41156 3.59306L5.60578 5.17023C5.51004 5.35763 5.35763 5.51004 5.17023 5.60578L3.59306 6.41156C2.28116 7.08181 1.65006 8.60544 2.10377 10.007L2.64923 11.692C2.71404 11.8922 2.71404 12.1078 2.64923 12.308L2.10377 13.993C1.65006 15.3946 2.28116 16.9182 3.59306 17.5885L5.17023 18.3942C5.35763 18.49 5.51004 18.6424 5.60578 18.8298L6.41156 20.407C7.08181 21.7189 8.60544 22.35 10.007 21.8963L11.692 21.3508C11.8922 21.286 12.1078 21.286 12.308 21.3508L13.993 21.8963C15.3946 22.35 16.9182 21.7189 17.5885 20.407L18.3942 18.8298C18.49 18.6424 18.6424 18.49 18.8298 18.3942L20.407 17.5885C21.7189 16.9182 22.35 15.3946 21.8963 13.993L21.3508 12.308C21.286 12.1078 21.286 11.8922 21.3508 11.692L21.8963 10.007C22.35 8.60544 21.7189 7.08181 20.407 6.41156L18.8298 5.60578C18.6424 5.51004 18.49 5.35763 18.3942 5.17023L17.5885 3.59306C16.9182 2.28116 15.3946 1.65006 13.993 2.10377L12.308 2.64923C12.1078 2.71403 11.8922 2.71404 11.692 2.64923L10.007 2.10377Z" />
+                            <path
+                              d="M6.75977 11.7573L8.17399 10.343L11.0024 13.1715L16.6593 7.51465L18.0735 8.92886L11.0024 15.9999L6.75977 11.7573Z"
+                              fill="#ffffff"
+                            />
+                          </svg>
+                        ) : null}
+                      </div>
 
                   {data.monthlyListeners ? (
                     <p
@@ -415,6 +431,7 @@ function ArtistContent() {
                     </Button>
                   </div>
                 </div>
+              </div>
 
                 {data.description && (
                   <div

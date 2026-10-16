@@ -200,9 +200,17 @@ function createReverbImpulseResponse(context: AudioContext): AudioBuffer {
   return buffer;
 }
 
+export interface DeckNodes {
+  sourceNode: MediaElementAudioSourceNode;
+  filterNode: BiquadFilterNode;
+  gainNode: GainNode;
+}
+
 interface AudioEffectsGraph {
   ctx: AudioContext;
-  sourceNode: MediaElementAudioSourceNode;
+  mixerInputGain: GainNode;
+  deckA: DeckNodes | null;
+  deckB: DeckNodes | null;
   pitchDryGain: GainNode;
   pitchWetGain: GainNode;
   pitchStageOutput: GainNode;
@@ -224,19 +232,100 @@ export interface AudioEffectsParams {
 
 export class PitchShifterController {
   private context: AudioContext | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
   private graph: AudioEffectsGraph | null = null;
   private isConnected = false;
 
-  public attach(audio: HTMLAudioElement): void {
+  private ensureGraph(ctx: AudioContext): AudioEffectsGraph {
+    const win = window as any;
+    if (win.__liner_pitch_graph && win.__liner_pitch_graph.mixerInputGain) {
+      this.graph = win.__liner_pitch_graph;
+      this.context = ctx;
+      this.isConnected = true;
+      return win.__liner_pitch_graph;
+    }
+
+    const mixerInputGain = ctx.createGain();
+    mixerInputGain.gain.value = 1.0;
+
+    const pitchDryGain = ctx.createGain();
+    const pitchWetGain = ctx.createGain();
+    const pitchStageOutput = ctx.createGain();
+    const masterDryGain = ctx.createGain();
+    const masterOutputGain = ctx.createGain();
+
+    pitchDryGain.gain.value = 1.0;
+    pitchWetGain.gain.value = 0.0;
+    masterDryGain.gain.value = 1.0;
+    masterOutputGain.gain.value = 1.0;
+
+    const shifter = new HannPitchShifter(ctx);
+
+    mixerInputGain.connect(pitchDryGain);
+    mixerInputGain.connect(pitchWetGain);
+
+    pitchDryGain.connect(pitchStageOutput);
+    pitchWetGain.connect(shifter.input);
+    shifter.output.connect(pitchStageOutput);
+
+    pitchStageOutput.connect(masterDryGain);
+    masterDryGain.connect(masterOutputGain);
+
+    const reverbSendGain = ctx.createGain();
+    reverbSendGain.gain.value = 1.0;
+
+    const convolver = ctx.createConvolver();
+    convolver.normalize = true;
+    convolver.buffer = createReverbImpulseResponse(ctx);
+
+    const reverbHighpass = ctx.createBiquadFilter();
+    reverbHighpass.type = "highpass";
+    reverbHighpass.frequency.value = 120;
+    reverbHighpass.Q.value = 0.7;
+
+    const reverbWetGain = ctx.createGain();
+    reverbWetGain.gain.value = 0.0;
+
+    pitchStageOutput.connect(reverbSendGain);
+    reverbSendGain.connect(convolver);
+    convolver.connect(reverbHighpass);
+    reverbHighpass.connect(reverbWetGain);
+    reverbWetGain.connect(masterOutputGain);
+
+    const { input: enhancerIn, output: enhancerOut } = audioEnhancer.init(ctx);
+    masterOutputGain.connect(enhancerIn);
+    enhancerOut.connect(ctx.destination);
+
+    const graph: AudioEffectsGraph = {
+      ctx,
+      mixerInputGain,
+      deckA: null,
+      deckB: null,
+      pitchDryGain,
+      pitchWetGain,
+      pitchStageOutput,
+      shifter,
+      masterDryGain,
+      masterOutputGain,
+      reverbSendGain,
+      convolver,
+      reverbHighpass,
+      reverbWetGain,
+    };
+
+    win.__liner_pitch_graph = graph;
+    this.graph = graph;
+    this.context = ctx;
+    this.isConnected = true;
+    return graph;
+  }
+
+  public attachDeck(audio: HTMLAudioElement, deckId: "A" | "B"): void {
     if (typeof window === "undefined") return;
     const win = window as any;
 
     try {
       const AudioCtx = window.AudioContext || win.webkitAudioContext;
-      if (!AudioCtx) {
-        return;
-      }
+      if (!AudioCtx) return;
 
       if (!win.__liner_audio_context) {
         win.__liner_audio_context = new AudioCtx();
@@ -250,156 +339,74 @@ export class PitchShifterController {
         });
       }
 
+      const graph = this.ensureGraph(ctx);
+
       const audioObj = audio as any;
       let sourceNode = audioObj.__liner_source_node as MediaElementAudioSourceNode | undefined;
 
       if (!sourceNode) {
-        if (win.__liner_media_source_node && win.__liner_media_source_node.mediaElement === audio) {
-          sourceNode = win.__liner_media_source_node;
+        try {
+          sourceNode = ctx.createMediaElementSource(audio);
           audioObj.__liner_source_node = sourceNode;
-        } else {
-          try {
-            sourceNode = ctx.createMediaElementSource(audio);
-            audioObj.__liner_source_node = sourceNode;
-            win.__liner_media_source_node = sourceNode;
-          } catch (sourceErr: any) {
-            if (win.__liner_media_source_node) {
-              sourceNode = win.__liner_media_source_node;
-              audioObj.__liner_source_node = sourceNode;
-            } else {
-              throw sourceErr;
-            }
-          }
+        } catch (sourceErr: any) {
+          console.warn(`[AudioEffects] createMediaElementSource for Deck ${deckId} failed:`, sourceErr);
+          return;
         }
       }
 
-      if (!sourceNode) {
+      const existingDeck = deckId === "A" ? graph.deckA : graph.deckB;
+      if (existingDeck && existingDeck.sourceNode === sourceNode) {
         return;
       }
 
-      // Check if existing graph is valid and has all reverb + pitch nodes
-      const isCompleteGraph = (g: any): g is AudioEffectsGraph => {
-        return Boolean(
-          g &&
-          g.sourceNode === sourceNode &&
-          g.convolver &&
-          g.reverbWetGain &&
-          g.reverbSendGain &&
-          g.pitchStageOutput &&
-          g.masterOutputGain &&
-          g.masterDryGain &&
-          g.shifter
-        );
-      };
+      const filterNode = ctx.createBiquadFilter();
+      filterNode.type = "highpass";
+      filterNode.frequency.value = 20;
+      filterNode.Q.value = 0.707;
 
-      let graph = (audioObj.__liner_pitch_graph || win.__liner_pitch_graph) as AudioEffectsGraph | undefined;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = deckId === "A" ? 1.0 : 0.0;
 
-      if (!isCompleteGraph(graph)) {
-        // Disconnect any legacy/stale nodes from the old graph
-        if (graph) {
-          try {
-            (graph as any).sourceNode?.disconnect();
-            (graph as any).dryGain?.disconnect();
-            (graph as any).wetGain?.disconnect();
-            (graph as any).outputGain?.disconnect();
-            (graph as any).pitchDryGain?.disconnect();
-            (graph as any).pitchWetGain?.disconnect();
-            (graph as any).pitchStageOutput?.disconnect();
-            (graph as any).masterDryGain?.disconnect();
-            (graph as any).masterOutputGain?.disconnect();
-            (graph as any).reverbSendGain?.disconnect();
-            (graph as any).convolver?.disconnect();
-            (graph as any).reverbHighpass?.disconnect();
-            (graph as any).reverbWetGain?.disconnect();
-          } catch {}
-        }
-        delete audioObj.__liner_pitch_graph;
-        delete win.__liner_pitch_graph;
+      sourceNode.connect(filterNode);
+      filterNode.connect(gainNode);
+      gainNode.connect(graph.mixerInputGain);
 
-        try {
-          sourceNode.disconnect();
-        } catch {}
-
-        const pitchDryGain = ctx.createGain();
-        const pitchWetGain = ctx.createGain();
-        const pitchStageOutput = ctx.createGain();
-        const masterDryGain = ctx.createGain();
-        const masterOutputGain = ctx.createGain();
-
-        // 100% dry bypass by default
-        pitchDryGain.gain.value = 1.0;
-        pitchWetGain.gain.value = 0.0;
-        masterDryGain.gain.value = 1.0;
-        masterOutputGain.gain.value = 1.0;
-
-        const shifter = new HannPitchShifter(ctx);
-
-        // Pitch stage routing
-        sourceNode.connect(pitchDryGain);
-        sourceNode.connect(pitchWetGain);
-
-        pitchDryGain.connect(pitchStageOutput);
-        pitchWetGain.connect(shifter.input);
-        shifter.output.connect(pitchStageOutput);
-
-        // Direct path from pitch stage to master
-        pitchStageOutput.connect(masterDryGain);
-        masterDryGain.connect(masterOutputGain);
-
-        // Reverb stage routing
-        const reverbSendGain = ctx.createGain();
-        reverbSendGain.gain.value = 1.0;
-
-        const convolver = ctx.createConvolver();
-        convolver.normalize = true;
-        convolver.buffer = createReverbImpulseResponse(ctx);
-
-        // Filter out sub-bass mud from reverb (keeps kick/808 tight)
-        const reverbHighpass = ctx.createBiquadFilter();
-        reverbHighpass.type = "highpass";
-        reverbHighpass.frequency.value = 120;
-        reverbHighpass.Q.value = 0.7;
-
-        const reverbWetGain = ctx.createGain();
-        reverbWetGain.gain.value = 0.0; // Disabled by default
-
-        pitchStageOutput.connect(reverbSendGain);
-        reverbSendGain.connect(convolver);
-        convolver.connect(reverbHighpass);
-        reverbHighpass.connect(reverbWetGain);
-        reverbWetGain.connect(masterOutputGain);
-
-        const { input: enhancerIn, output: enhancerOut } = audioEnhancer.init(ctx);
-        masterOutputGain.connect(enhancerIn);
-        enhancerOut.connect(ctx.destination);
-
-        graph = {
-          ctx,
-          sourceNode,
-          pitchDryGain,
-          pitchWetGain,
-          pitchStageOutput,
-          shifter,
-          masterDryGain,
-          masterOutputGain,
-          reverbSendGain,
-          convolver,
-          reverbHighpass,
-          reverbWetGain,
-        };
-
-        audioObj.__liner_pitch_graph = graph;
-        win.__liner_pitch_graph = graph;
+      const deckNodes: DeckNodes = { sourceNode, filterNode, gainNode };
+      if (deckId === "A") {
+        graph.deckA = deckNodes;
+      } else {
+        graph.deckB = deckNodes;
       }
-
-      this.context = graph.ctx;
-      this.sourceNode = graph.sourceNode;
-      this.graph = graph;
-      this.isConnected = true;
     } catch (err) {
-      console.error("[AudioEffects] Failed to attach to audio element:", err);
-      this.isConnected = false;
+      console.error(`[AudioEffects] Failed to attach deck ${deckId}:`, err);
     }
+  }
+
+  public attach(audio: HTMLAudioElement): void {
+    this.attachDeck(audio, "A");
+  }
+
+  public setDeckGain(deck: "A" | "B", gain: number, rampTimeSec: number = 0.02): void {
+    if (!this.graph || !this.context) return;
+    const deckNodes = deck === "A" ? this.graph.deckA : this.graph.deckB;
+    if (!deckNodes) return;
+    const now = this.context.currentTime;
+    deckNodes.gainNode.gain.setTargetAtTime(Math.max(0, Math.min(1.5, gain)), now, rampTimeSec);
+  }
+
+  public setDeckFilter(deck: "A" | "B", frequencyHz: number, rampTimeSec: number = 0.02): void {
+    if (!this.graph || !this.context) return;
+    const deckNodes = deck === "A" ? this.graph.deckA : this.graph.deckB;
+    if (!deckNodes) return;
+    const now = this.context.currentTime;
+    deckNodes.filterNode.frequency.setTargetAtTime(Math.max(20, Math.min(2000, frequencyHz)), now, rampTimeSec);
+  }
+
+  public resetDecks(activeDeck: "A" | "B" = "A"): void {
+    this.setDeckGain("A", activeDeck === "A" ? 1.0 : 0.0, 0.01);
+    this.setDeckGain("B", activeDeck === "B" ? 1.0 : 0.0, 0.01);
+    this.setDeckFilter("A", 20, 0.01);
+    this.setDeckFilter("B", 20, 0.01);
   }
 
   public resumeContext(): void {

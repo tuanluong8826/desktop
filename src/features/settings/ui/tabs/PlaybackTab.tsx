@@ -42,6 +42,22 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
   const setDiscordRpcEnabled = usePlayerStore(
     (state) => state.setDiscordRpcEnabled,
   );
+  const autoMixEnabled = usePlayerStore((state) => state.autoMixEnabled);
+  const setAutoMixEnabled = usePlayerStore((state) => state.setAutoMixEnabled);
+  const autoMixDurationSec = usePlayerStore((state) => state.autoMixDurationSec);
+  const setAutoMixDurationSec = usePlayerStore(
+    (state) => state.setAutoMixDurationSec,
+  );
+  const autoMixDjFilter = usePlayerStore((state) => state.autoMixDjFilter);
+  const setAutoMixDjFilter = usePlayerStore(
+    (state) => state.setAutoMixDjFilter,
+  );
+  const spatialAudioEnabled = usePlayerStore((state) => state.spatialAudioEnabled);
+  const setSpatialAudioEnabled = usePlayerStore((state) => state.setSpatialAudioEnabled);
+  const soundCheckEnabled = usePlayerStore((state) => state.soundCheckEnabled);
+  const setSoundCheckEnabled = usePlayerStore((state) => state.setSoundCheckEnabled);
+  const appleDigitalMasterEnabled = usePlayerStore((state) => state.appleDigitalMasterEnabled);
+  const setAppleDigitalMasterEnabled = usePlayerStore((state) => state.setAppleDigitalMasterEnabled);
 
   const [currentApiUrl, setCurrentApiUrl] = useState(() => getApiBaseUrl());
   const [serverMode, setServerMode] = useState<"primary" | "edge" | "custom">(() => {
@@ -200,6 +216,103 @@ export function PlaybackTab({ searchQuery }: { searchQuery?: string }) {
               checked={Boolean(discordRpcEnabled)}
               onChange={setDiscordRpcEnabled}
               ariaLabel="Bật tắt Discord Rich Presence"
+            />
+          }
+        />
+      </SettingSection>
+
+      <SettingSection label="AutoMix & Chuyển bài mượt mà (Apple Music & Spotify)">
+        <SettingRow
+          title="AutoMix (Trộn nhạc tự động)"
+          description="Tự động hòa âm và chuyển bài mượt mà trước khi kết thúc bằng đường cong Equal-Power Crossfade (chuẩn Apple Music & Spotify), loại bỏ khoảng lặng giữa các bài hát."
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={autoMixEnabled}
+              onChange={setAutoMixEnabled}
+              ariaLabel="Bật tắt AutoMix"
+            />
+          }
+        />
+
+        {autoMixEnabled && (
+          <>
+            <SettingRow
+              title="Thời lượng chuyển bài (Crossfade Duration)"
+              description="Thời gian hòa âm chồng lấn giữa 2 bài hát. 5s là chuẩn Apple Music, 7s–10s mang lại phong cách Radio/DJ club."
+              searchQuery={searchQuery}
+              control={
+                mounted ? (
+                  <SegmentedControl
+                    ariaLabel="Thời lượng chuyển bài"
+                    value={String(autoMixDurationSec)}
+                    onChange={(val) => setAutoMixDurationSec(Number(val))}
+                    options={[
+                      { value: "3", label: "3s" },
+                      { value: "5", label: "5s (Apple)" },
+                      { value: "7", label: "7s" },
+                      { value: "10", label: "10s" },
+                      { value: "12", label: "12s" },
+                    ]}
+                  />
+                ) : (
+                  <span />
+                )
+              }
+            />
+
+            <SettingRow
+              title="Bộ lọc tần số thấp DJ (Spotify Automix Ducking)"
+              description="Tự động lọc dải trầm (bass/sub-bass) của bài hát cũ khi chuyển bài để âm thanh không bị rè hoặc đè lẫn nhau, giữ cho tiếng kick của bài hát mới luôn uy lực."
+              searchQuery={searchQuery}
+              control={
+                <ToggleSwitch
+                  checked={autoMixDjFilter}
+                  onChange={setAutoMixDjFilter}
+                  ariaLabel="Bật tắt bộ lọc DJ Automix"
+                />
+              }
+            />
+          </>
+        )}
+      </SettingSection>
+
+      <SettingSection label="Chất lượng âm thanh phòng thu (Apple Music Audio Master)">
+        <SettingRow
+          title="Apple Spatial Audio 3D (Âm thanh vòm không gian 3D)"
+          description="Mô phỏng trường âm thanh Dolby Atmos 3D đa chiều với độ sâu âm hình, tách bạch nhạc cụ và độ rộng không gian phòng thu cao cấp."
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={spatialAudioEnabled}
+              onChange={setSpatialAudioEnabled}
+              ariaLabel="Bật tắt Apple Spatial Audio 3D"
+            />
+          }
+        />
+
+        <SettingRow
+          title="Sound Check (Chuẩn hóa âm lượng EBU R128)"
+          description="Tự động cân bằng độ lớn âm lượng giữa các bài hát theo chuẩn Apple Music Sound Check (-16 LUFS), loại bỏ cảm giác giật mình khi chuyển giữa các bản nhạc to nhỏ thất thường."
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={soundCheckEnabled}
+              onChange={setSoundCheckEnabled}
+              ariaLabel="Bật tắt Sound Check"
+            />
+          }
+        />
+
+        <SettingRow
+          title="Apple Digital Master Tuning (Chất âm Hi-Res Lossless)"
+          description="Đường cong cân bằng âm thanh độc quyền của Apple: tối ưu độ ấm của âm trầm, tôn vinh giọng ca sĩ (vocal clarity) và tăng độ trong trẻo, mịn màng ở dải tần số cao."
+          searchQuery={searchQuery}
+          control={
+            <ToggleSwitch
+              checked={appleDigitalMasterEnabled}
+              onChange={setAppleDigitalMasterEnabled}
+              ariaLabel="Bật tắt Apple Digital Master Tuning"
             />
           }
         />

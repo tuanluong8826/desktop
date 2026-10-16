@@ -17,6 +17,7 @@ import {
   User2Fill,
   AlbumFill,
   PlaylistFill,
+  LeftLine,
 } from "@mingcute/react";
 import Sidebar from "./Sidebar";
 import WindowControls from "./WindowControls";
@@ -85,10 +86,10 @@ export default function AppFrame({ children }: AppFrameProps) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [queuePopupOpen, setQueuePopupOpen] = useState(false);
-  const [rightDrawerTab, setRightDrawerTabState] = useState<"queue" | "lyrics">(() => {
-    if (typeof window === "undefined") return "queue";
+  const [rightDrawerTab, setRightDrawerTabState] = useState<"info" | "queue" | "lyrics">(() => {
+    if (typeof window === "undefined") return "info";
     const saved = window.localStorage.getItem("liner_right_drawer_tab");
-    return saved === "queue" || saved === "lyrics" ? saved : "queue";
+    return saved === "info" || saved === "queue" || saved === "lyrics" ? saved : "info";
   });
   const fullscreenPlayerOpen = usePlayerStore((state) => state.fullscreen);
   const setFullscreenPlayerOpen = usePlayerStore((state) => state.setFullscreen);
@@ -242,13 +243,13 @@ export default function AppFrame({ children }: AppFrameProps) {
     }
   }, [isFullscreenPlayer, hasCurrentTrack, handleCloseFullscreen]);
 
-  const setRightDrawerTab = useCallback((tab: "queue" | "lyrics") => {
+  const setRightDrawerTab = useCallback((tab: "info" | "queue" | "lyrics") => {
     setRightDrawerTabState(tab);
     localStorage.setItem("liner_right_drawer_tab", tab);
   }, []);
 
   const openRightPanel = useCallback(
-    (tab: "queue" | "lyrics") => {
+    (tab: "info" | "queue" | "lyrics") => {
       setRightDrawerTab(tab);
       setQueuePopupOpen(true);
     },
@@ -602,7 +603,8 @@ export default function AppFrame({ children }: AppFrameProps) {
           coverUrl: it.coverUrl,
           itemData: it,
         });
-        navigate(`/artist?id=${encodeURIComponent(it.id)}`);
+        const artistName = it.name || it.title || "";
+        navigate(`/artist?id=${encodeURIComponent(it.id)}&name=${encodeURIComponent(artistName)}`);
       } else if (
         it._type === "playlist" ||
         it.owner !== undefined ||
@@ -762,26 +764,41 @@ export default function AppFrame({ children }: AppFrameProps) {
           </AnimatePresence>
 
           {!isFullscreenPlayer && (
-            <AnimatePresence initial={false}>
-              {isRightDrawerOpen && (
-                <motion.aside
-                  key="right-drawer"
-                  ref={queueDrawerRef}
-                  initial={{ x: RIGHT_DRAWER_WIDTH }}
-                  animate={{ x: 0 }}
-                  exit={{ x: RIGHT_DRAWER_WIDTH }}
-                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-auto absolute inset-y-0 right-0 z-[50]"
-                  style={{ width: RIGHT_DRAWER_WIDTH }}
+            <>
+              {!isRightDrawerOpen && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueuePopupOpen(true);
+                  }}
+                  title={t("player.now_playing") || "Mở tab bên phải"}
+                  aria-label={t("player.now_playing") || "Mở tab bên phải"}
+                  className="group pointer-events-auto absolute right-0 top-1/2 -translate-y-1/2 z-[45] flex h-[64px] w-[14px] hover:w-[22px] items-center justify-center rounded-l-lg bg-black/40 hover:bg-black/75 backdrop-blur-xl border-l border-t border-b border-white/15 text-white/50 hover:text-white transition-all duration-200 cursor-pointer shadow-[-6px_0_16px_rgba(0,0,0,0.4)]"
                 >
-                  <RightDrawer
-                    activeTab={rightDrawerTab}
-                    onTabChange={setRightDrawerTab}
-                    onClose={closeRightPanel}
-                  />
-                </motion.aside>
+                  <LeftLine size={13} className="transition-transform duration-150 group-hover:-translate-x-0.5" />
+                </button>
               )}
-            </AnimatePresence>
+              <AnimatePresence initial={false}>
+                {isRightDrawerOpen && (
+                  <motion.aside
+                    key="right-drawer"
+                    ref={queueDrawerRef}
+                    initial={{ x: RIGHT_DRAWER_WIDTH }}
+                    animate={{ x: 0 }}
+                    exit={{ x: RIGHT_DRAWER_WIDTH }}
+                    transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    className="pointer-events-auto absolute inset-y-0 right-0 z-[50]"
+                    style={{ width: RIGHT_DRAWER_WIDTH }}
+                  >
+                    <RightDrawer
+                      activeTab={rightDrawerTab}
+                      onTabChange={setRightDrawerTab}
+                      onClose={closeRightPanel}
+                    />
+                  </motion.aside>
+                )}
+              </AnimatePresence>
+            </>
           )}
         </main>
 
@@ -792,6 +809,15 @@ export default function AppFrame({ children }: AppFrameProps) {
           >
             <MiniPlayer
               embedded
+              rightPanelOpen={queuePopupOpen}
+              rightPanelTab={rightDrawerTab}
+              onRightPanelToggle={(tab) => {
+                if (queuePopupOpen && rightDrawerTab === tab) {
+                  setQueuePopupOpen(false);
+                } else {
+                  openRightPanel(tab);
+                }
+              }}
               onQueueOpenChange={handleQueuePopupToggle}
               onQueueToggle={handleQueuePopupToggleRequest}
               onFullscreenOpen={openFullscreenPlayer}

@@ -80,6 +80,71 @@ export function useCollection(type: string | null, id: string | null) {
             }
           }
 
+          const isItunesAlbum =
+            type === "album" &&
+            (decodedId.startsWith("itunes:") || id.startsWith("itunes:") || /^\d+$/.test(id));
+
+          if (isItunesAlbum) {
+            const itunesAlbumId = (decodedId || id).replace("itunes:", "");
+            const itunesRes = await fetch(
+              `https://itunes.apple.com/lookup?id=${itunesAlbumId}&entity=song`,
+            );
+            if (itunesRes.ok) {
+              const itunesData = await itunesRes.json();
+              const results = itunesData.results || [];
+              const albumMeta =
+                results.find((r: any) => r.wrapperType === "collection") || results[0];
+              const songItems = results.filter((r: any) => r.wrapperType === "track");
+
+              if (albumMeta) {
+                const rawCover = albumMeta.artworkUrl100 || "";
+                const coverHd = rawCover.replace(/\/\d+x\d+bb\./, "/1200x1200bb.");
+                const albumTitle = albumMeta.collectionName || "Unknown Album";
+                const artistName = albumMeta.artistName || "Unknown Artist";
+                const releaseYear = albumMeta.releaseDate
+                  ? parseInt(albumMeta.releaseDate.slice(0, 4), 10)
+                  : undefined;
+                const genre = albumMeta.primaryGenreName || "";
+
+                const tracks: Track[] = songItems.map((item: any) => {
+                  const songCover = (item.artworkUrl100 || rawCover).replace(
+                    /\/\d+x\d+bb\./,
+                    "/1200x1200bb.",
+                  );
+                  return {
+                    type: "track",
+                    id: `itunes_song_${item.trackId}`,
+                    title: item.trackName,
+                    artists: item.artistName || artistName,
+                    artistList: [{ id: "", name: item.artistName || artistName }],
+                    album: {
+                      id: decodedId,
+                      title: albumTitle,
+                    },
+                    durationMs: item.trackTimeMillis,
+                    playCount: 0,
+                    coverUrl: songCover,
+                    explicit: item.trackExplicitness === "explicit",
+                  };
+                });
+
+                const formatted: CollectionPageData = {
+                  type: "album",
+                  title: albumTitle,
+                  author: artistName,
+                  artists: [{ id: "", name: artistName }],
+                  description: genre
+                    ? `${genre} • ${albumMeta.trackCount || tracks.length} tracks`
+                    : undefined,
+                  year: releaseYear,
+                  coverUrl: coverHd,
+                  tracks,
+                };
+                return formatted;
+              }
+            }
+          }
+
           const collection =
             type === "playlist"
               ? await api.getPlaylist(id)

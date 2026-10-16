@@ -7,6 +7,7 @@ import CoverImage from "@/features/covers/ui/CoverImage";
 import { useRemoveExternalItem } from "../../hooks";
 import { useTranslation } from "@/languages";
 import { useModalStore } from "../../store/modalStore";
+import { removeLocalSavedItem } from "../../utils/savedMetadata";
 
 function RemoveFromLibraryModalContent() {
   const { toast } = useToast();
@@ -27,6 +28,8 @@ function RemoveFromLibraryModalContent() {
 
     const targetType = detail.type;
     const targetId = detail.id;
+
+    removeLocalSavedItem(targetType, targetId);
 
     close();
 

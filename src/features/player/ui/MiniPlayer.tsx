@@ -9,6 +9,7 @@ import {
   Repeat,
   RepeatOne,
   Shuffle,
+  StarsMinimalistic,
   SkipNext,
   SkipPrevious,
   VolumeCross,
@@ -19,7 +20,7 @@ import {
   Bookmark,
   PlaybackSpeed,
 } from "@solar-icons/react";
-import { HeartFill, HeartLine } from "@mingcute/react";
+import { HeartFill, HeartLine, LayoutRightLine } from "@mingcute/react";
 import LyricsIcon from "@/shared/ui/LyricsIcon";
 
 import { usePlayerState } from "../hooks/usePlayerState";
@@ -188,6 +189,9 @@ function extractColorsFromCanvas(
 export interface MiniPlayerProps {
   onQueueOpenChange?: (open: boolean) => void;
   onQueueToggle?: () => void;
+  onRightPanelToggle?: (tab: "info" | "queue" | "lyrics") => void;
+  rightPanelOpen?: boolean;
+  rightPanelTab?: "info" | "queue" | "lyrics";
   onFullscreenOpen?: () => void;
   embedded?: boolean;
 }
@@ -195,6 +199,9 @@ export interface MiniPlayerProps {
 function MiniPlayer({
   onQueueOpenChange,
   onQueueToggle,
+  onRightPanelToggle,
+  rightPanelOpen,
+  rightPanelTab,
   onFullscreenOpen,
   embedded = false,
 }: MiniPlayerProps) {
@@ -327,7 +334,7 @@ function MiniPlayer({
     if (isLiked) {
       unlikeMutation.mutate(currentTrack.id, { onSettled });
     } else {
-      likeMutation.mutate(currentTrack.id, { onSettled });
+      likeMutation.mutate(currentTrack, { onSettled });
     }
   }, [currentTrack, isLiked, likeMutation, unlikeMutation]);
 
@@ -658,11 +665,11 @@ function MiniPlayer({
         <div
           className={`relative grid h-full pointer-events-none ${
             embedded
-              ? "grid-cols-[280px_minmax(0,1fr)_260px]"
+              ? "grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)]"
               : "grid-cols-[286px_minmax(0,1fr)]"
           } ${!usesRoundedStyle && !embedded ? "pb-[4px]" : ""}`}
         >
-          <div className="flex h-full items-center gap-[16px] px-[18px] pt-[1px] pointer-events-none cursor-default">
+          <div className="flex h-full items-center gap-[16px] px-[18px] pt-[1px] pointer-events-none cursor-default min-w-0">
             <div
               role="button"
               tabIndex={0}
@@ -752,34 +759,90 @@ function MiniPlayer({
               className="ml-auto flex items-center gap-[2px] rounded-lg bg-bg-toolbox p-[3px] pointer-events-auto prevent-seek cursor-default"
               onPointerDown={(e) => e.stopPropagation()}
             >
+              {/* 1. Now Playing View */}
               <button
                 type="button"
-                aria-label="Shuffle"
-                title={player.shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
+                aria-label={t("player.now_playing") || "Now Playing"}
+                title={t("player.now_playing") || "Now Playing"}
                 className={`${iconButtonClass} ${
-                  player.shuffle ? "bg-bg-toolbox-active text-text-primary" : ""
+                  rightPanelOpen && rightPanelTab === "info"
+                    ? "bg-bg-toolbox-active text-text-primary"
+                    : ""
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => playerEngine.setShuffle(!player.shuffle)}
+                onClick={() => {
+                  setSpeedOpen(false);
+                  setVolumeOpen(false);
+                  if (onRightPanelToggle) {
+                    onRightPanelToggle("info");
+                  } else {
+                    onQueueToggle?.();
+                  }
+                }}
+                style={{ cursor: "pointer" }}
               >
-                <Shuffle size={18} weight={player.shuffle ? "Bold" : "Outline"} />
+                <LayoutRightLine size={18} />
               </button>
+
+              {/* 2. Lyrics (Karaoke Mic) */}
               <button
                 type="button"
-                aria-label="Repeat"
-                title="Repeat"
+                aria-label={t("player.lyrics") || "Lyrics"}
+                title={t("player.lyrics") || "Lyrics"}
                 className={`${iconButtonClass} ${
-                  player.repeat !== "off" ? "bg-bg-toolbox-active text-text-primary" : ""
+                  rightPanelOpen && rightPanelTab === "lyrics"
+                    ? "bg-bg-toolbox-active text-text-primary"
+                    : ""
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={() =>
-                  playerEngine.setRepeat(
-                    player.repeat === "one" ? "off" : "one",
-                  )
-                }
+                onClick={() => {
+                  setSpeedOpen(false);
+                  setVolumeOpen(false);
+                  if (onRightPanelToggle) {
+                    onRightPanelToggle("lyrics");
+                  } else {
+                    usePlayerStore.getState().setShowLyrics(true);
+                    onFullscreenOpen?.();
+                  }
+                }}
+                style={{ cursor: "pointer" }}
               >
-                {repeatIcon}
+                <LyricsIcon size={17} />
               </button>
+
+              {/* 3. Queue */}
+              <button
+                type="button"
+                aria-label={t("player.queue") || "Queue"}
+                title={t("player.queue") || "Queue"}
+                className={`${iconButtonClass} ${
+                  rightPanelOpen && rightPanelTab === "queue"
+                    ? "bg-bg-toolbox-active text-text-primary"
+                    : ""
+                }`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setSpeedOpen(false);
+                  setVolumeOpen(false);
+                  setQueueLimit(50);
+                  if (onRightPanelToggle) {
+                    onRightPanelToggle("queue");
+                  } else {
+                    onQueueToggle?.();
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              >
+                <Sidebar size={20} weight="Bold" />
+              </button>
+
+              {/* Divider */}
+              <span
+                className="mx-[3px] h-[16px] w-px bg-border-toolbox-divider"
+                aria-hidden="true"
+              />
+
+              {/* 4. Speed & Pitch */}
               <button
                 ref={speedToggleRef}
                 type="button"
@@ -818,6 +881,8 @@ function MiniPlayer({
                   />
                 </motion.div>
               </button>
+
+              {/* 5. Volume */}
               <button
                 ref={volumeToggleRef}
                 type="button"
@@ -843,22 +908,8 @@ function MiniPlayer({
                   <VolumeLoud size={20} />
                 )}
               </button>
-              <button
-                type="button"
-                aria-label={t("player.lyrics") || "Lyrics"}
-                title={t("player.lyrics") || "Lyrics"}
-                className={iconButtonClass}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setSpeedOpen(false);
-                  setVolumeOpen(false);
-                  usePlayerStore.getState().setShowLyrics(true);
-                  onFullscreenOpen?.();
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <LyricsIcon size={17} />
-              </button>
+
+              {/* 6. Fullscreen */}
               <button
                 type="button"
                 aria-label="Open player"
@@ -873,35 +924,44 @@ function MiniPlayer({
               >
                 <MaximizeSquare3 size={18} weight="Outline" />
               </button>
-              <span
-                className="mx-[3px] h-[16px] w-px bg-border-toolbox-divider"
-                aria-hidden="true"
-              />
-              <button
-                type="button"
-                aria-label="Queue"
-                title="Queue"
-                className={iconButtonClass}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => {
-                  setSpeedOpen(false);
-                  setVolumeOpen(false);
-                  setQueueLimit(50);
-                  onQueueToggle?.();
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <Sidebar size={20} weight="Bold" />
-              </button>
             </div>
           </div>
         </div>
 
+        {/* Center Playback Controls: Shuffle - Previous - Play/Pause - Next - Repeat */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div
-            className="pointer-events-auto flex items-center gap-[8px] prevent-seek cursor-default"
+            className="pointer-events-auto flex items-center gap-[10px] prevent-seek cursor-default"
             onPointerDown={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              aria-label="Shuffle"
+              title={
+                player.smartShuffle
+                  ? "Smart Shuffle (Trộn bài & Đề xuất Spotify)"
+                  : player.shuffle
+                  ? t("player.shuffle_on")
+                  : t("player.shuffle_off")
+              }
+              className={`${iconButtonClass} relative ${
+                player.smartShuffle
+                  ? "bg-accent-primary/20 text-accent-primary !opacity-100"
+                  : player.shuffle
+                  ? "text-accent-primary"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => playerEngine.cycleShuffleMode()}
+            >
+              <Shuffle size={18} weight={player.shuffle ? "Bold" : "Outline"} />
+              {player.smartShuffle && (
+                <span className="absolute -top-[2px] -right-[2px] flex text-accent-primary">
+                  <StarsMinimalistic size={9} weight="Bold" />
+                </span>
+              )}
+            </button>
+
             <button
               type="button"
               aria-label="Previous track"
@@ -914,6 +974,7 @@ function MiniPlayer({
             >
               <SkipPrevious size={18} weight="Bold" />
             </button>
+
             <button
               type="button"
               aria-label={isPlaying ? "Pause" : "Play"}
@@ -935,6 +996,7 @@ function MiniPlayer({
                 <Play size={16} weight="Bold" className="translate-x-[0.5px]" />
               )}
             </button>
+
             <button
               type="button"
               aria-label="Next track"
@@ -946,6 +1008,25 @@ function MiniPlayer({
               style={{ cursor: "pointer" }}
             >
               <SkipNext size={18} weight="Bold" />
+            </button>
+
+            <button
+              type="button"
+              aria-label="Repeat"
+              title="Repeat"
+              className={`${iconButtonClass} ${
+                player.repeat !== "off"
+                  ? "text-accent-primary"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() =>
+                playerEngine.setRepeat(
+                  player.repeat === "one" ? "off" : "one",
+                )
+              }
+            >
+              {repeatIcon}
             </button>
           </div>
         </div>

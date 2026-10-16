@@ -99,7 +99,7 @@ const MIN_WINDOW_HEIGHT = 705;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    title: "Liner",
+    title: "miloapi",
     icon: path.join(process.env.VITE_PUBLIC!, "icon.png"),
     width: DEFAULT_WINDOW_WIDTH,
     height: DEFAULT_WINDOW_HEIGHT,
@@ -233,12 +233,13 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(() => {
-    // register liner:// so browsers / xdg-open route share links to us
-    // (on linux the packaged .desktop carries the mime handler too)
-    if (process.defaultApp && process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1]!)]);
-    } else {
-      app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+    // register liner:// and miloapi:// so browsers / xdg-open route share links to us
+    for (const scheme of ["liner", "miloapi"]) {
+      if (process.defaultApp && process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1]!)]);
+      } else {
+        app.setAsDefaultProtocolClient(scheme);
+      }
     }
     touchBarManager = new TouchBarManager(
       path.join(__dirname, "preload.cjs"),

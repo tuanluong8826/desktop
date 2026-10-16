@@ -8,9 +8,10 @@ import {
   Repeat,
   RepeatOne,
   Shuffle,
+  StarsMinimalistic,
   MusicNote,
 } from "@solar-icons/react";
-import { AddLine, CheckFill } from "@mingcute/react";
+import { HeartFill, HeartLine } from "@mingcute/react";
 import { usePlayerState } from "../hooks/usePlayerState";
 import { playerEngine } from "../engine/playerEngine";
 import { useIsTrackLiked, useLikeTrack, useUnlikeTrack } from "@/features/library/hooks";
@@ -80,7 +81,7 @@ export function PlayerUiElements({
     if (isLiked) {
       unlikeMutation.mutate(track.id, { onSettled });
     } else {
-      likeMutation.mutate(track.id, { onSettled });
+      likeMutation.mutate(track, { onSettled });
     }
   }, [track, isLiked, likeMutation, unlikeMutation]);
 
@@ -90,9 +91,11 @@ export function PlayerUiElements({
 
   return (
     <>
-      {/* Artwork (Scales smoothly when centered vs split with lyrics) */}
-      <div
-        className={`relative shrink-0 overflow-hidden transition-all duration-300 ease-out bg-black/20 ${
+      {/* Artwork (Scales smoothly with layout animation when centered vs split with lyrics) */}
+      <motion.div
+        layout
+        transition={{ duration: 0.35, ease: [0.25, 1, 0.5, 1] }}
+        className={`group relative shrink-0 overflow-hidden bg-black/20 ${
           isCentered ? "w-[330px] h-[330px] rounded-2xl shadow-2xl" : "w-[280px] h-[280px] rounded-xl"
         } ${coverUrl && !isCoverLoaded ? "animate-pulse" : ""}`}
       >
@@ -123,50 +126,35 @@ export function PlayerUiElements({
             )}
           </motion.div>
         </AnimatePresence>
-        {/* tooltip wrapper positioned on cover corner */}
+
+        {/* Heart / Like button on picture (Only visible when hovering over picture) */}
         <Tooltip
           content={isLiked ? t("common.unlike") : t("common.like")}
           side="top"
-          wrapperClassName="!absolute bottom-2.5 left-2.5 z-20"
+          wrapperClassName="!absolute bottom-2.5 left-2.5 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto"
         >
           <button
             type="button"
             aria-label={isLiked ? t("common.unlike") : t("common.like")}
-            className={`relative inline-flex h-[30px] w-[30px] items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.92] bg-black/40 backdrop-blur-md border-none ${
-              isLiked
-                ? "text-white hover:bg-black/60"
-                : "text-white/70 hover:text-white hover:bg-black/60"
-            }`}
+            className="relative inline-flex h-[32px] w-[32px] items-center justify-center rounded-full transition-all duration-200 ease-out active:scale-[0.9] bg-black/50 backdrop-blur-md border border-white/10 hover:bg-black/70 cursor-pointer pointer-events-auto shadow-lg"
             onClick={handleLikeToggle}
-            style={{ cursor: "pointer" }}
           >
             <motion.div
-              initial={false}
-              animate={{
-                scale: isLiked ? 1 : 0.5,
-                opacity: isLiked ? 1 : 0,
-                rotate: isLiked ? 0 : -45,
-              }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0 flex items-center justify-center"
+              key={isLiked ? "liked" : "unliked"}
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="flex items-center justify-center"
             >
-              <CheckFill size={16} />
-            </motion.div>
-            <motion.div
-              initial={false}
-              animate={{
-                scale: !isLiked ? 1 : 0.5,
-                opacity: !isLiked ? 1 : 0,
-                rotate: !isLiked ? 0 : 45,
-              }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-0 flex items-center justify-center"
-            >
-              <AddLine size={16} />
+              {isLiked ? (
+                <HeartFill size={18} className="text-rose-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]" />
+              ) : (
+                <HeartLine size={18} className="text-white/80 hover:text-white" />
+              )}
             </motion.div>
           </button>
         </Tooltip>
-      </div>
+      </motion.div>
 
       {/* Track info */}
       <div className="w-[280px] flex items-start justify-center min-w-0">
@@ -206,18 +194,33 @@ export function PlayerUiElements({
         className="w-[320px]"
       />
 
-      {/* Primary Playback Controls */}
-      <div className="flex items-center gap-[14px]">
+      {/* Primary Playback Controls - Exactly 5 buttons so Play/Pause is always dead-center */}
+      <div className="flex items-center justify-center gap-[14px]">
         <button
           type="button"
           aria-label="Shuffle"
-          title={player.shuffle ? t("player.shuffle_on") : t("player.shuffle_off")}
-          onClick={() => playerEngine.setShuffle(!player.shuffle)}
-          className={`${iconButtonClass} ${
-            player.shuffle ? "!text-white !opacity-100" : "!text-white/40"
+          title={
+            player.smartShuffle
+              ? "Smart Shuffle (Trộn bài & Đề xuất Spotify)"
+              : player.shuffle
+              ? t("player.shuffle_on")
+              : t("player.shuffle_off")
+          }
+          onClick={() => playerEngine.cycleShuffleMode()}
+          className={`${iconButtonClass} relative ${
+            player.smartShuffle
+              ? "!text-accent-primary !opacity-100"
+              : player.shuffle
+              ? "!text-white !opacity-100"
+              : "!text-white/40"
           }`}
         >
           <Shuffle size={18} weight={player.shuffle ? "Bold" : "Outline"} />
+          {player.smartShuffle && (
+            <span className="absolute -top-[2px] -right-[2px] flex text-accent-primary">
+              <StarsMinimalistic size={9} weight="Bold" />
+            </span>
+          )}
         </button>
 
         <button
@@ -269,8 +272,13 @@ export function PlayerUiElements({
             <Repeat size={18} />
           )}
         </button>
+      </div>
 
-        {onToggleLyrics && (
+      {/* Bottom bar: Volume & Quick Actions (Volume centered, Lyrics toggle on right) */}
+      <div className="w-[320px] flex items-center justify-between px-2">
+        <div className="w-[28px] h-[28px] shrink-0" />
+        <VolumePicker className="w-[180px]" size="sm" />
+        {onToggleLyrics ? (
           <Tooltip
             content={
               showLyrics
@@ -297,11 +305,10 @@ export function PlayerUiElements({
               <LyricsIcon size={18} />
             </button>
           </Tooltip>
+        ) : (
+          <div className="w-[28px] h-[28px] shrink-0" />
         )}
       </div>
-
-      {/* Volume (Compact smooth slider, size sm) */}
-      <VolumePicker className="w-[180px]" size="sm" />
     </>
   );
 }

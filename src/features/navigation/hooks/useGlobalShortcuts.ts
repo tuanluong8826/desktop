@@ -20,12 +20,13 @@ const NON_REPEATABLE_CODES = new Set([
   "KeyF",
   "KeyQ",
   "KeyL",
+  "KeyI",
   "KeyM",
   "Slash",
   "Escape",
 ]);
 
-export type RightPanelTab = "queue" | "lyrics";
+export type RightPanelTab = "info" | "queue" | "lyrics";
 
 export interface GlobalShortcutsOptions {
   enabled?: boolean;
@@ -127,6 +128,12 @@ export function useGlobalShortcuts(options: GlobalShortcutsOptions): void {
           event.preventDefault();
           if (opts.rightPanelOpen && opts.rightPanelTab === "lyrics") opts.closeRightPanel();
           else opts.openRightPanel("lyrics");
+          return;
+        }
+        case "KeyI": {
+          event.preventDefault();
+          if (opts.rightPanelOpen && opts.rightPanelTab === "info") opts.closeRightPanel();
+          else opts.openRightPanel("info");
           return;
         }
         case "KeyM": {

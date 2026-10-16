@@ -206,7 +206,7 @@ export class DiscordRpcClient {
   }
 
   private sendActivityPayload(activity: DiscordSongActivity | null): void {
-    if (!activity || !activity.title) {
+    if (!activity || !activity.title || activity.paused) {
       this.sendPacket(1, {
         cmd: "SET_ACTIVITY",
         args: {
@@ -228,14 +228,9 @@ export class DiscordRpcClient {
     const payloadActivity: Record<string, unknown> = {
       type: 2, // 2 = "Listening to..."
       details: activity.title.slice(0, 128),
-      state: activity.paused
-        ? `${activity.artist.slice(0, 120)} (Tạm dừng)`
-        : activity.artist.slice(0, 128),
+      state: activity.artist.slice(0, 128),
       assets: {
         large_image: activity.coverUrl || "https://tryliner.fun/icon.png",
-        large_text: (activity.album || activity.title).slice(0, 128),
-        small_image: activity.paused ? "pause" : "play",
-        small_text: activity.paused ? "Tạm dừng" : "Đang phát trên Liner",
       },
       buttons: [
         {

@@ -6,6 +6,7 @@ import CoverImage from "@/features/covers/ui/CoverImage";
 import { useSaveExternalItem } from "../../hooks";
 import { useTranslation } from "@/languages";
 import { useModalStore } from "../../store/modalStore";
+import { addLocalSavedItem } from "../../utils/savedMetadata";
 
 export default function AddToLibraryModal() {
   const { toast } = useToast();
@@ -19,6 +20,12 @@ export default function AddToLibraryModal() {
 
   const handleAdd = useCallback(() => {
     if (!item) return;
+
+    addLocalSavedItem(item.type, item.id, {
+      title: item.title,
+      coverUrl: item.coverUrl,
+      type: item.type,
+    });
 
     saveExternal.mutate(
       { type: item.type, id: item.id },

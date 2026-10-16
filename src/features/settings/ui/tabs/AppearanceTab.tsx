@@ -3,6 +3,7 @@ import { useTheme } from "next-themes";
 import {
   usePlayerStore,
   type AccentVariant,
+  type AppIconStyle,
 } from "@/features/player";
 import { useTranslation, LOCALE_OPTIONS } from "@/languages";
 import { Select } from "@/shared/ui";
@@ -57,6 +58,50 @@ const brandingVariants: readonly AccentVariant[] = [
   "pixel",
   "scanlines",
   "vhs",
+];
+
+const appIconOptions: {
+  id: AppIconStyle;
+  label: string;
+  sublabel: string;
+  src: string;
+}[] = [
+  {
+    id: "default",
+    label: "Milo Web Music",
+    sublabel: "Tím Gradient",
+    src: "/icon.png",
+  },
+  {
+    id: "cyber",
+    label: "Cyberpunk",
+    sublabel: "Cyan & Blue",
+    src: "/icon-cyber.png",
+  },
+  {
+    id: "sunset",
+    label: "Sunset Coral",
+    sublabel: "Cam san hô",
+    src: "/icon-sunset.png",
+  },
+  {
+    id: "emerald",
+    label: "Emerald",
+    sublabel: "Xanh lục Spotify",
+    src: "/icon-emerald.png",
+  },
+  {
+    id: "gold",
+    label: "Gold Vinyl",
+    sublabel: "Đĩa than ánh vàng",
+    src: "/icon-gold.png",
+  },
+  {
+    id: "minimal",
+    label: "Minimal",
+    sublabel: "Titanium tối giản",
+    src: "/icon-minimal.png",
+  },
 ];
 
 // tiny dashboard mock so theme choice reads visually instead of as text
@@ -178,6 +223,8 @@ export function AppearanceTab({ searchQuery }: { searchQuery?: string }) {
   const { theme, setTheme } = useTheme();
   const accentVariant = usePlayerStore((state) => state.accentVariant);
   const setAccentVariant = usePlayerStore((state) => state.setAccentVariant);
+  const appIconStyle = usePlayerStore((state) => state.appIconStyle);
+  const setAppIconStyle = usePlayerStore((state) => state.setAppIconStyle);
   const isGlassActive = useCustomizationStore(selectIsGlassThemeActive);
 
   useEffect(() => {
@@ -307,6 +354,75 @@ export function AppearanceTab({ searchQuery }: { searchQuery?: string }) {
                   >
                     {label}
                   </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </SettingBlock>
+
+      {/* ── App Icon Selector ── */}
+      <SettingBlock
+        title={t("settings.app_icon.title") || "Biểu tượng ứng dụng (App Icon)"}
+        description={
+          t("settings.app_icon.description") ||
+          "Thay đổi biểu tượng hiển thị trên macOS Dock và cửa sổ ứng dụng."
+        }
+        titleKey="settings.app_icon.title"
+        descKey="settings.app_icon.description"
+        searchQuery={searchQuery}
+      >
+        {mounted ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-[10px]">
+            {appIconOptions.map((opt) => {
+              const isActive = (appIconStyle || "default") === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setAppIconStyle(opt.id)}
+                  aria-pressed={isActive}
+                  className={`group relative flex items-center gap-[12px] p-[10px] rounded-xl border text-left transition-all cursor-pointer ${
+                    isActive
+                      ? "border-text-primary bg-bg-elevated ring-1 ring-text-primary/50 shadow-sm"
+                      : "border-border-primary bg-border-alpha-14 hover:border-text-tertiary hover:bg-bg-elevated"
+                  }`}
+                >
+                  <img
+                    src={opt.src}
+                    alt={opt.label}
+                    className="w-[42px] h-[42px] rounded-xl shrink-0 shadow-md object-cover"
+                    draggable={false}
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span
+                      className={`text-[12.5px] leading-tight truncate ${
+                        isActive ? "text-text-primary font-[600]" : "text-text-secondary group-hover:text-text-primary"
+                      }`}
+                      style={font}
+                    >
+                      {opt.label}
+                    </span>
+                    <span
+                      className="text-[11px] text-text-tertiary truncate leading-tight mt-[2px]"
+                      style={font}
+                    >
+                      {opt.sublabel}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <span className="absolute right-[8px] top-[8px] flex h-[16px] w-[16px] items-center justify-center rounded-full bg-text-primary">
+                      <svg width="9" height="9" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                        <path
+                          d="M2 6.5L4.5 9L10 3"
+                          stroke="var(--color-bg-primary)"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  )}
                 </button>
               );
             })}

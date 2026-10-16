@@ -53,13 +53,20 @@ export default function ArtistLink({
 
   if (artistList && artistList.length > 0) {
     innerContent = artistList.map((artist, index) => {
-      const targetId =
-        artist.id && artist.id !== "unknown"
+      const rawId =
+        artist.id && artist.id !== "unknown" && artist.id.toLowerCase() !== "artist"
           ? artist.id
-          : artistList.length === 1 && artistId && artistId !== "unknown"
-            ? artistId
-            : artist.name;
-      const isClickable = Boolean(targetId && targetId !== "unknown");
+          : "";
+      const rawSingleFallback =
+        artistList.length === 1 && artistId && artistId !== "unknown" && artistId.toLowerCase() !== "artist"
+          ? artistId
+          : "";
+      const artistName =
+        artist.name && artist.name.toLowerCase() !== "artist"
+          ? artist.name
+          : name || artists || "";
+      const targetId = rawId || rawSingleFallback || artistName;
+      const isClickable = Boolean(targetId && targetId !== "unknown" && targetId.toLowerCase() !== "artist");
       return (
         <Fragment key={artist.id || `${artist.name}-${index}`}>
           {index > 0 && (
@@ -87,7 +94,7 @@ export default function ArtistLink({
                 ? (e) => {
                     e.stopPropagation();
                     onNavigate?.();
-                    navigate(`/artist?id=${encodeURIComponent(targetId)}`);
+                    navigate(`/artist?id=${encodeURIComponent(targetId)}&name=${encodeURIComponent(artistName)}`);
                   }
                 : undefined
             }
@@ -98,7 +105,7 @@ export default function ArtistLink({
                       e.preventDefault();
                       e.stopPropagation();
                       onNavigate?.();
-                      navigate(`/artist?id=${encodeURIComponent(targetId)}`);
+                      navigate(`/artist?id=${encodeURIComponent(targetId)}&name=${encodeURIComponent(artistName)}`);
                     }
                   }
                 : undefined
@@ -113,7 +120,7 @@ export default function ArtistLink({
     const text = name ?? artists;
     if (!text) return null;
 
-    if (artistId && artistId !== "unknown") {
+    if (artistId && artistId !== "unknown" && artistId.toLowerCase() !== "artist") {
       innerContent = (
         <span
           role="button"
@@ -125,14 +132,14 @@ export default function ArtistLink({
           onClick={(e) => {
             e.stopPropagation();
             onNavigate?.();
-            navigate(`/artist?id=${encodeURIComponent(artistId)}`);
+            navigate(`/artist?id=${encodeURIComponent(artistId)}&name=${encodeURIComponent(text)}`);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               e.stopPropagation();
               onNavigate?.();
-              navigate(`/artist?id=${encodeURIComponent(artistId)}`);
+              navigate(`/artist?id=${encodeURIComponent(artistId)}&name=${encodeURIComponent(text)}`);
             }
           }}
         >
@@ -162,14 +169,14 @@ export default function ArtistLink({
               onClick={(e) => {
                 e.stopPropagation();
                 onNavigate?.();
-                navigate(`/artist?id=${encodeURIComponent(part)}`);
+                navigate(`/artist?id=${encodeURIComponent(part)}&name=${encodeURIComponent(part)}`);
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   e.stopPropagation();
                   onNavigate?.();
-                  navigate(`/artist?id=${encodeURIComponent(part)}`);
+                  navigate(`/artist?id=${encodeURIComponent(part)}&name=${encodeURIComponent(part)}`);
                 }
               }}
             >
@@ -189,14 +196,14 @@ export default function ArtistLink({
             onClick={(e) => {
               e.stopPropagation();
               onNavigate?.();
-              navigate(`/artist?id=${encodeURIComponent(text)}`);
+              navigate(`/artist?id=${encodeURIComponent(text)}&name=${encodeURIComponent(text)}`);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 e.stopPropagation();
                 onNavigate?.();
-                navigate(`/artist?id=${encodeURIComponent(text)}`);
+                navigate(`/artist?id=${encodeURIComponent(text)}&name=${encodeURIComponent(text)}`);
               }
             }}
           >

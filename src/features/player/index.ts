@@ -4,6 +4,7 @@ export { toVolumeGain, toVolumeLevel } from "./engine/volume";
 export {
   usePlayerStore,
   type AccentVariant,
+  type AppIconStyle,
   type AudioQuality,
   type MiniPlayerStyle,
   type TrackDoubleClickBehavior,

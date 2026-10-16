@@ -68,6 +68,9 @@
     "remove_from_library": "Remove from library",
     "save_to_library": "Save to library",
     "share": "Share",
+    "details": "Details",
+    "follow": "Follow",
+    "following": "Following",
     "back": "Back",
     "link_copied": "Link copied",
     "download": "Download",
@@ -199,7 +202,8 @@
     "popularArtists": "Trending Artists",
     "popularPlaylists": "Popular Playlists",
     "dailyMixes": "Daily Mixes",
-    "dailyMixesSubtitle": "Fresh playlists curated around your favorite artists and genres"
+    "dailyMixesSubtitle": "Fresh playlists curated around your favorite artists and genres",
+    "libraryAlbums": "Albums from your library"
   },
   "library": {
     "title": "Library",
@@ -337,8 +341,17 @@
     }
   },
   "player": {
+    "credits": "Credits",
+    "composer_lyricist": "Composer & Lyricist",
+    "producer_arranger": "Producer & Arranger",
+    "next_in_queue": "Next in queue",
+    "open_queue": "Open queue",
+    "lyrics_preview": "Lyrics preview",
+    "no_track_playing": "No track currently playing",
+    "fullscreen": "Fullscreen",
     "nothing_playing": "Nothing playing",
     "choose_track": "Choose a track in search",
+    "now_playing": "Now Playing",
     "queue": "Queue",
     "lyrics": "Lyrics",
     "hide_lyrics": "Hide lyrics",
@@ -634,6 +647,10 @@
       "scanlines": "Scanlines",
       "vhs": "Chrome"
     },
+    "app_icon": {
+      "title": "App Icon",
+      "description": "Choose the icon style for macOS Dock and application window."
+    },
     "audio": {
       "title": "Streaming Quality",
       "description": "Select the default audio quality for playback.",
@@ -707,7 +724,7 @@
       "badge_private": "Private"
     },
     "about": {
-      "liner": "Liner",
+      "liner": "miloapi",
       "telegram": "Channel",
       "support": "Support",
       "github": "GitHub",
