@@ -977,7 +977,7 @@ export class PlayerRuntime {
 
       this.cacheAudioInBackground(track, url, sessionMime, bgCacheController.signal);
 
-      if (this.audio.readyState < 3) {
+      if (this.audio.readyState < 2) {
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => {
             if (this.audio.readyState < 2) {

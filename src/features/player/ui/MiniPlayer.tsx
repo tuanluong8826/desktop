@@ -663,13 +663,11 @@ function MiniPlayer({
           </div>
         )}
         <div
-          className={`relative grid h-full pointer-events-none ${
-            embedded
-              ? "grid-cols-[minmax(220px,1fr)_auto_minmax(220px,1fr)]"
-              : "grid-cols-[286px_minmax(0,1fr)]"
-          } ${!usesRoundedStyle && !embedded ? "pb-[4px]" : ""}`}
+          className={`relative grid h-full pointer-events-none grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] ${
+            !usesRoundedStyle && !embedded ? "pb-[4px]" : ""
+          }`}
         >
-          <div className="flex h-full items-center gap-[16px] px-[18px] pt-[1px] pointer-events-none cursor-default min-w-0">
+          <div className="flex h-full items-center gap-[12px] pl-[14px] pr-[8px] pt-[1px] pointer-events-none cursor-default min-w-0 max-w-full overflow-hidden">
             <div
               role="button"
               tabIndex={0}
@@ -694,9 +692,9 @@ function MiniPlayer({
                 className="h-[38px] w-[38px] object-cover rounded-[8px]"
               />
             </div>
-            <div className="flex min-w-0 flex-col pointer-events-none">
+            <div className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden pointer-events-none">
               <p
-                className="m-0 truncate text-[16px] font-[400] text-text-primary flex items-center gap-[6px] pointer-events-none"
+                className="m-0 truncate text-[14px] sm:text-[15px] font-[400] text-text-primary flex items-center gap-[6px] pointer-events-none"
                 style={{
                   fontFamily: "var(--font-inter), sans-serif",
                   lineHeight: "18px",
@@ -707,7 +705,7 @@ function MiniPlayer({
                   role="button"
                   tabIndex={0}
                   aria-label="Open player"
-                  className="min-w-0 truncate cursor-pointer pointer-events-auto prevent-seek"
+                  className="min-w-0 truncate cursor-pointer pointer-events-auto prevent-seek hover:underline"
                   onClick={onFullscreenOpen}
                   onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
@@ -721,7 +719,7 @@ function MiniPlayer({
                 </span>
               </p>
               <p
-                className="m-0 mt-[4px] flex min-w-0 items-center gap-[5px] text-[13px] font-[300] text-text-tertiary pointer-events-none"
+                className="m-0 mt-[2px] flex min-w-0 items-center gap-[5px] text-[12px] sm:text-[13px] font-[300] text-text-tertiary pointer-events-none truncate"
                 style={{
                   fontFamily: "var(--font-inter), sans-serif",
                   lineHeight: "15px",
@@ -732,7 +730,7 @@ function MiniPlayer({
                   name={trackArtists}
                   artistId={player.currentTrack?.artistId}
                   artistList={player.currentTrack?.artistList}
-                  className="text-text-tertiary pointer-events-auto"
+                  className="text-text-tertiary pointer-events-auto truncate"
                 />
               </p>
             </div>
@@ -750,10 +748,11 @@ function MiniPlayer({
             </button>
           </div>
 
+          {/* Center Playback Spacer to prevent overlap */}
+          <div className="pointer-events-none flex h-full items-center justify-center min-w-[210px] shrink-0" />
+
           <div
-            className={`flex h-full items-center pl-[10px] pr-[18px] pointer-events-none ${
-              embedded ? "col-start-3" : ""
-            }`}
+            className="flex h-full items-center pl-[6px] pr-[14px] pointer-events-none min-w-0 justify-end"
           >
             <div
               className="ml-auto flex items-center gap-[2px] rounded-lg bg-bg-toolbox p-[3px] pointer-events-auto prevent-seek cursor-default"

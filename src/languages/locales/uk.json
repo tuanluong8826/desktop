@@ -186,7 +186,14 @@
     "songs_few": "{count} пісні",
     "songs_many": "{count} пісень",
     "env_warning": "Застосунок має працювати всередині Electron — діплінки, перевірки з'єднання та шаринг потребують десктоп-мосту.",
-    "env_skip": "Пропустити"
+    "env_skip": "Пропустити",
+    "details": "Details",
+    "follow": "Follow",
+    "following": "Following",
+    "tracks_plural": "{count} tracks",
+    "songs_plural": "{count} songs",
+    "add_to_library_desc": "Added to your library",
+    "failed_to_remove_library": "Failed to remove from library"
   },
   "home": {
     "speedDial": "Швидкий доступ",
@@ -203,7 +210,9 @@
     "popularArtists": "Популярні артисти",
     "popularPlaylists": "Популярні плейлисти",
     "dailyMixes": "Дейлі мікси",
-    "dailyMixesSubtitle": "Свіжі мікси на основі улюблених артистів та жанрів"
+    "dailyMixesSubtitle": "Свіжі мікси на основі улюблених артистів та жанрів",
+    "recommendedForYou": "Рекомендовано для вас",
+    "libraryAlbums": "Albums from your library"
   },
   "library": {
     "title": "Бібліотека",
@@ -232,7 +241,11 @@
     "no_albums_desc": "Зберігайте альбоми з пошуку або рекомендацій, щоб вони були під рукою",
     "no_artists_title": "Немає збережених виконавців",
     "no_artists_desc": "Зберігайте виконавців, щоб швидко переходити до їхньої дискографії",
-    "search_music": "Знайти музику"
+    "search_music": "Знайти музику",
+    "like": "Like",
+    "unlike": "Unlike",
+    "added_to_likes": "Added to Liked Songs",
+    "removed_from_likes": "Removed from Liked Songs"
   },
   "login": {
     "welcome_back": "З поверненням",
@@ -405,7 +418,9 @@
     "min": "хв",
     "sec": "сек",
     "empty_title": "Цей плейліст порожній",
-    "empty_subtitle": "Знайдіть пісні, щоб додати їх"
+    "empty_subtitle": "Знайдіть пісні, щоб додати їх",
+    "add_to_playlist": "Add to playlist",
+    "likes_empty": "Songs you like will appear here"
   },
   "search": {
     "placeholder": "Пошук треків, виконавців, альбомів...",
@@ -545,7 +560,6 @@
       "file_too_large": "Розмір файлу не повинен перевищувати 30 МБ",
       "read_error": "Не вдалося прочитати файл зображення"
     },
-
     "audio_data": {
       "description": "Якість стрімінгу, офлайн-кеш та діагностика з'єднання."
     },

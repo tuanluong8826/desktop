@@ -188,7 +188,12 @@
     "settings": "Ajustes",
     "save": "Guardar",
     "play": "Reproducir",
-    "pause": "Pausar"
+    "pause": "Pausar",
+    "details": "Details",
+    "follow": "Follow",
+    "following": "Following",
+    "add_to_library_desc": "Added to your library",
+    "failed_to_remove_library": "Failed to remove from library"
   },
   "home": {
     "speedDial": "Speed dial",
@@ -208,7 +213,9 @@
     "dailyMixesSubtitle": "Fresh playlists curated around your favorite artists and genres",
     "welcome": "Bienvenido",
     "popular_songs": "Canciones populares",
-    "recommended": "Recomendado para ti"
+    "recommended": "Recomendado para ti",
+    "recommendedForYou": "Recomendado para ti",
+    "libraryAlbums": "Albums from your library"
   },
   "library": {
     "title": "Library",
@@ -237,7 +244,11 @@
     "no_albums_desc": "Save albums from search or recommendations to find them quickly",
     "no_artists_title": "No saved artists",
     "no_artists_desc": "Save artists to quickly access their discography",
-    "search_music": "Search music"
+    "search_music": "Search music",
+    "like": "Like",
+    "unlike": "Unlike",
+    "added_to_likes": "Added to Liked Songs",
+    "removed_from_likes": "Removed from Liked Songs"
   },
   "login": {
     "welcome_back": "Welcome back",
@@ -413,7 +424,9 @@
     "min": "min",
     "sec": "sec",
     "empty_title": "This playlist is empty",
-    "empty_subtitle": "Search for songs to add"
+    "empty_subtitle": "Search for songs to add",
+    "add_to_playlist": "Add to playlist",
+    "likes_empty": "Songs you like will appear here"
   },
   "search": {
     "placeholder": "Search tracks, artists, albums...",

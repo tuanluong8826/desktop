@@ -1015,8 +1015,49 @@ if (!gotTheLock) {
       };
     });
 
+    interface CachedStreamInfo {
+      streamUrl: string;
+      mimeType: string;
+      codec: string;
+      expiresAt: number;
+    }
+    const streamUrlCache = new Map<string, CachedStreamInfo>();
+    const searchToVideoIdCache = new Map<string, string>();
+
+    const fetchYouTubeVideoId = async (query: string): Promise<string | null> => {
+      const qLower = query.toLowerCase().trim();
+      const cached = searchToVideoIdCache.get(qLower);
+      if (cached) return cached;
+
+      try {
+        const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+          signal: AbortSignal.timeout(3500),
+        });
+        if (!res.ok) return null;
+        const html = await res.text();
+        const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+        if (match && match[1]) {
+          const vid = match[1];
+          searchToVideoIdCache.set(qLower, vid);
+          return vid;
+        }
+      } catch {}
+      return null;
+    };
+
     ipcMain.handle("audio:resolve-stream", async (_event, trackId: string, metadata?: { title?: string; artists?: string }) => {
       if (!trackId || typeof trackId !== "string") return null;
+
+      // 0. Instant Cache Check (<1ms)
+      const cached = streamUrlCache.get(trackId);
+      if (cached && Date.now() < cached.expiresAt) {
+        console.log(`[audio:resolve-stream] instant cache hit for ${trackId}`);
+        return { streamUrl: cached.streamUrl, mimeType: cached.mimeType, codec: cached.codec };
+      }
 
       // Locate yt-dlp binary across packaged and unpackaged environments
       const candidatePaths = [
@@ -1096,6 +1137,7 @@ if (!gotTheLock) {
               "--no-warnings",
               "--no-check-certificates",
               "--prefer-free-formats",
+              "--cache-dir", "/tmp/yt-dlp-cache",
               "-f", "140/ba/bestaudio",
               "-g",
               target,
@@ -1131,11 +1173,15 @@ if (!gotTheLock) {
               const url = lines.find((l) => l.trim().startsWith("http"))?.trim();
               if (code === 0 && url) {
                 const isWebm = url.includes("mime=audio%2Fwebm") || url.includes("webm");
-                resolve({
+                const streamRes = {
                   streamUrl: url,
                   mimeType: isWebm ? "audio/webm" : "audio/mp4",
                   codec: isWebm ? "opus" : "aac",
-                });
+                };
+                const matchExp = url.match(/expire=(\d+)/);
+                const expiresAt = matchExp ? parseInt(matchExp[1], 10) * 1000 - 120000 : Date.now() + 5 * 3600 * 1000;
+                streamUrlCache.set(trackId, { ...streamRes, expiresAt });
+                resolve(streamRes);
               } else {
                 console.warn("[audio:resolve-stream] target failed:", target, "code:", code, "stderr:", stderr.slice(0, 150));
                 resolve(null);
@@ -1156,7 +1202,7 @@ if (!gotTheLock) {
       // 1. If clean 11-char YouTube ID, try direct URL first
       const isCleanId = /^[a-zA-Z0-9_-]{11}$/.test(trackId);
       if (isCleanId) {
-        const directRes = await runYtDlp(`https://www.youtube.com/watch?v=${trackId}`, 10000);
+        const directRes = await runYtDlp(`https://www.youtube.com/watch?v=${trackId}`, 9000);
         if (directRes) {
           console.log("[audio:resolve-stream] resolved direct id", trackId);
           return directRes;
@@ -1169,7 +1215,17 @@ if (!gotTheLock) {
       const query = (artist && title ? `${artist} ${title}` : title || trackId.replace(/^itunes_song_/, "")).trim();
 
       if (query) {
-        console.log(`[audio:resolve-stream] searching YouTube for: "${query}" (trackId: ${trackId})`);
+        // Fast HTTPS lookup to get top videoId in ~0.5s instead of 6s ytsearch
+        const fastVideoId = await fetchYouTubeVideoId(query);
+        if (fastVideoId) {
+          console.log(`[audio:resolve-stream] fast videoId found for "${query}": ${fastVideoId}`);
+          const fastRes = await runYtDlp(`https://www.youtube.com/watch?v=${fastVideoId}`, 9000);
+          if (fastRes) {
+            return fastRes;
+          }
+        }
+
+        console.log(`[audio:resolve-stream] fallback ytsearch for: "${query}" (trackId: ${trackId})`);
         const searchRes = await runYtDlp(`ytsearch1:${query}`, 12000);
         if (searchRes) {
           console.log(`[audio:resolve-stream] resolved query "${query}" for ${trackId}`);

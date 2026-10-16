@@ -186,7 +186,14 @@
     "songs_few": "{count} песни",
     "songs_many": "{count} песен",
     "env_warning": "Приложение должно работать внутри Electron — диплинки, проверки соединения и шаринг нуждаются в десктоп-мосте.",
-    "env_skip": "Пропустить"
+    "env_skip": "Пропустить",
+    "details": "Details",
+    "follow": "Follow",
+    "following": "Following",
+    "tracks_plural": "{count} tracks",
+    "songs_plural": "{count} songs",
+    "add_to_library_desc": "Added to your library",
+    "failed_to_remove_library": "Failed to remove from library"
   },
   "home": {
     "speedDial": "Быстрый доступ",
@@ -203,7 +210,9 @@
     "popularArtists": "Популярные артисты",
     "popularPlaylists": "Популярные плейлисты",
     "dailyMixes": "Дейли миксы",
-    "dailyMixesSubtitle": "Свежие миксы на основе любимых артистов и жанров"
+    "dailyMixesSubtitle": "Свежие миксы на основе любимых артистов и жанров",
+    "recommendedForYou": "Рекомендовано для вас",
+    "libraryAlbums": "Albums from your library"
   },
   "library": {
     "title": "Библиотека",
@@ -232,7 +241,11 @@
     "no_albums_desc": "Сохраняйте альбомы из поиска или рекомендаций, чтобы они были под рукой",
     "no_artists_title": "Нет сохранённых исполнителей",
     "no_artists_desc": "Сохраняйте исполнителей, чтобы быстро переходить к их дискографии",
-    "search_music": "Найти музыку"
+    "search_music": "Найти музыку",
+    "like": "Like",
+    "unlike": "Unlike",
+    "added_to_likes": "Added to Liked Songs",
+    "removed_from_likes": "Removed from Liked Songs"
   },
   "login": {
     "welcome_back": "С возвращением",
@@ -405,7 +418,9 @@
     "min": "мин",
     "sec": "сек",
     "empty_title": "Этот плейлист пуст",
-    "empty_subtitle": "Найдите песни, чтобы добавить их"
+    "empty_subtitle": "Найдите песни, чтобы добавить их",
+    "add_to_playlist": "Add to playlist",
+    "likes_empty": "Songs you like will appear here"
   },
   "search": {
     "placeholder": "Поиск треков, исполнителей, альбомов...",
@@ -545,7 +560,6 @@
       "file_too_large": "Размер файла не должен превышать 30 МБ",
       "read_error": "Не удалось прочитать файл изображения"
     },
-
     "audio_data": {
       "description": "Качество стриминга, офлайн-кеш и диагностика соединения."
     },
