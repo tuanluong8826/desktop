@@ -807,9 +807,7 @@ export class PlayerRuntime {
       this.recoveryAttempts = 0;
     }
 
-    if (this.preloadingTrackId === track.id && this.preloadingPromise) {
-      await this.preloadingPromise;
-    } else if (this.preloadingTrackId && this.preloadingTrackId !== track.id) {
+    if (this.preloadingTrackId) {
       this.preloadAbortController?.abort();
       this.preloadAbortController = null;
       this.preloadingTrackId = null;

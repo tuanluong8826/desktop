@@ -133,6 +133,16 @@ function CollectionContent() {
     }
   }, [isReady, skeletonExited]);
 
+  useEffect(() => {
+    if (data?.tracks && data.tracks.length > 0) {
+      const firstTrack = data.tracks[0];
+      if (firstTrack?.id && typeof window !== "undefined" && (window as any).linerElectron?.resolveStream) {
+        const artistName = typeof firstTrack.artists === "string" ? firstTrack.artists : (firstTrack.artists as any)?.[0]?.name || "";
+        void (window as any).linerElectron.resolveStream(firstTrack.id, { title: firstTrack.title, artists: artistName });
+      }
+    }
+  }, [data]);
+
   const playbackContext = id ? `${entityType}:${decodedId}` : (data?.title || null);
 
   const { toast } = useToast();

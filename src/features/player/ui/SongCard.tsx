@@ -39,6 +39,7 @@ export interface SongCardProps {
 }
 
 function SongCard({
+  id,
   title,
   artists,
   artistId,
@@ -68,10 +69,37 @@ function SongCard({
   const { t } = useTranslation();
   const [imageLoaded, setImageLoaded] = useState(() => isCoverReady(coverUrl));
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setImageLoaded(isCoverReady(coverUrl));
   }, [coverUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (id && typeof window !== "undefined" && (window as any).linerElectron?.resolveStream) {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = setTimeout(() => {
+        hoverTimerRef.current = null;
+        const artistName = typeof artists === "string" ? artists : "";
+        void (window as any).linerElectron.resolveStream(id, { title, artists: artistName });
+      }, 120);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  };
 
   const imageSizeClass = compact ? "h-[40px] w-[40px]" : "h-[48px] w-[48px]";
   const titleSizeClass = compact ? "text-[14px]" : "text-[16px]";
@@ -114,6 +142,8 @@ function SongCard({
         className ?? ""
       } ${onPlay ? "cursor-pointer" : ""} ${onPlay && !className?.includes("hover:bg-") ? "hover:bg-border-alpha-14" : ""}`}
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       onPointerDown={(e) => {
         if (clickTimerRef.current) {
           clearTimeout(clickTimerRef.current);

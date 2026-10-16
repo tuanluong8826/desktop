@@ -421,6 +421,16 @@ function LibraryPlaylistContent() {
     }
   }, [isReady, skeletonExited]);
 
+  useEffect(() => {
+    if (viewData?.tracks && viewData.tracks.length > 0) {
+      const firstTrack = viewData.tracks[0];
+      if (firstTrack?.id && typeof window !== "undefined" && (window as any).linerElectron?.resolveStream) {
+        const artistName = typeof firstTrack.artists === "string" ? firstTrack.artists : (firstTrack.artists as any)?.[0]?.name || "";
+        void (window as any).linerElectron.resolveStream(firstTrack.id, { title: firstTrack.title, artists: artistName });
+      }
+    }
+  }, [viewData]);
+
   if (!isLoading && !viewData) {
     return (
       <div className="h-full w-full bg-transparent flex items-center justify-center">
