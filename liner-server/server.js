@@ -166,18 +166,146 @@ app.all(["/v1/tracks/:id/radio", "/v1/radio/:id"], async (req, res) => {
   }
 });
 
-// 6. Playback Session creation
+// In-memory map of in-progress track streams for deduplication and instant streaming
+// In-memory map of in-progress track streams for deduplication and instant streaming
+const activeDownloads = new Map();
+
+function getCachedFilePath(id) {
+  const m4a = path.join(CACHE_DIR, `${id}.m4a`);
+  if (fs.existsSync(m4a)) {
+    try {
+      if (fs.statSync(m4a).size > 10000) return { path: m4a, mime: "audio/mp4", ext: "m4a" };
+    } catch {}
+  }
+  const webm = path.join(CACHE_DIR, `${id}.webm`);
+  if (fs.existsSync(webm)) {
+    try {
+      if (fs.statSync(webm).size > 10000) return { path: webm, mime: "audio/webm", ext: "webm" };
+    } catch {}
+  }
+  return null;
+}
+
+function ensureTrackDownload(id, metadata) {
+  const cached = getCachedFilePath(id);
+  if (cached) return null;
+  if (activeDownloads.has(id)) {
+    return activeDownloads.get(id);
+  }
+
+  const isCleanId = /^[a-zA-Z0-9_-]{11}$/.test(id);
+  let target = `https://www.youtube.com/watch?v=${id}`;
+  if (!isCleanId && metadata) {
+    const q = (metadata.artist && metadata.title ? `${metadata.artist} ${metadata.title}` : metadata.title || id).trim();
+    target = `ytsearch1:${q}`;
+  }
+
+  const tempFile = path.join(CACHE_DIR, `${id}.tmp`);
+  const finalFile = path.join(CACHE_DIR, `${id}.m4a`);
+  const fileWriteStream = fs.createWriteStream(tempFile);
+  const listeners = new Set();
+  const chunks = [];
+
+  const proc = spawn("yt-dlp", [
+    "--no-playlist",
+    "--no-warnings",
+    "--no-check-certificates",
+    "-f", "140/ba/bestaudio",
+    "--buffer-size", "16K",
+    "-o", "-",
+    target
+  ]);
+
+  const task = {
+    proc,
+    tempFile,
+    finalFile,
+    chunks,
+    listeners,
+    mimeType: "audio/mp4",
+    done: false,
+    addListener(res) {
+      res.setHeader("Content-Type", this.mimeType);
+      res.setHeader("Accept-Ranges", "bytes");
+      for (const chunk of chunks) {
+        if (!res.writableEnded) res.write(chunk);
+      }
+      if (this.done) {
+        if (!res.writableEnded) res.end();
+      } else {
+        listeners.add(res);
+        res.on("close", () => {
+          listeners.delete(res);
+        });
+      }
+    }
+  };
+
+  proc.stdout.on("data", (chunk) => {
+    chunks.push(chunk);
+    fileWriteStream.write(chunk);
+    for (const res of listeners) {
+      if (!res.writableEnded) {
+        try { res.write(chunk); } catch {}
+      }
+    }
+  });
+
+  proc.stdout.on("end", () => {
+    task.done = true;
+    fileWriteStream.end();
+    for (const res of listeners) {
+      if (!res.writableEnded) {
+        try { res.end(); } catch {}
+      }
+    }
+    listeners.clear();
+    activeDownloads.delete(id);
+  });
+
+  fileWriteStream.on("finish", () => {
+    try {
+      if (fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
+        fs.renameSync(tempFile, finalFile);
+        console.log(`[CDN Cache] Successfully stored track on disk: ${id} (${fs.statSync(finalFile).size} bytes)`);
+      }
+    } catch (e) {
+      console.error("Cache rename error:", e);
+    }
+  });
+
+  proc.on("error", (err) => {
+    console.error("yt-dlp error:", err);
+    activeDownloads.delete(id);
+    for (const res of listeners) {
+      if (!res.headersSent) res.status(500).json({ error: "Stream error" });
+      else if (!res.writableEnded) res.end();
+    }
+    try { fs.unlinkSync(tempFile); } catch {}
+  });
+
+  activeDownloads.set(id, task);
+  return task;
+}
+
+// 6. Playback Session creation (with stream pre-warming into CDN disk)
 app.all(["/v1/tracks/:id/playback", "/v1/playback/:id"], (req, res) => {
   const id = req.params.id;
+  const metadata = req.body || {};
+  // Pre-warm the stream in background as soon as session is created!
+  try {
+    ensureTrackDownload(id, metadata);
+  } catch {}
+
   res.json({
     sessionId: `ses_${id}_${Date.now()}`,
     playbackId: `pb_${id}`,
     trackId: id,
     transport: "proxy",
     streamUrl: `/v1/playback/${id}/media`,
-    codec: "opus",
+    codec: "aac",
     bitrate: 160000,
-    mimeType: "audio/webm",
+    mimeType: "audio/mp4",
     expiresAt: new Date(Date.now() + 86400000).toISOString()
   });
 });
@@ -185,93 +313,50 @@ app.all(["/v1/tracks/:id/playback", "/v1/playback/:id"], (req, res) => {
 // 7. Audio Media Stream (Direct audio streaming with disk cache)
 app.get(["/v1/playback/:id/media", "/v1/tracks/:id/playback/media"], (req, res) => {
   const id = req.params.id;
-  const cachedFile = path.join(CACHE_DIR, `${id}.webm`);
+  const cached = getCachedFilePath(id);
 
-  // If already cached on disk, serve directly with Range support
-  if (fs.existsSync(cachedFile)) {
+  // If already cached on disk, serve directly with Range support (Instant CDN < 20ms)
+  if (cached) {
     try {
-      const stat = fs.statSync(cachedFile);
-      if (stat.size > 10000) {
-        const range = req.headers.range;
-        if (range) {
-          const parts = range.replace(/bytes=/, "").split("-");
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
-          const chunksize = end - start + 1;
-          const fileStream = fs.createReadStream(cachedFile, { start, end });
-          res.writeHead(206, {
-            "Content-Range": `bytes ${start}-${end}/${stat.size}`,
-            "Accept-Ranges": "bytes",
-            "Content-Length": chunksize,
-            "Content-Type": "audio/webm",
-          });
-          return fileStream.pipe(res);
-        } else {
-          res.writeHead(200, {
-            "Content-Length": stat.size,
-            "Accept-Ranges": "bytes",
-            "Content-Type": "audio/webm",
-          });
-          return fs.createReadStream(cachedFile).pipe(res);
-        }
+      const stat = fs.statSync(cached.path);
+      const range = req.headers.range;
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+        const chunksize = end - start + 1;
+        const fileStream = fs.createReadStream(cached.path, { start, end });
+        res.writeHead(206, {
+          "Content-Range": `bytes ${start}-${end}/${stat.size}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": chunksize,
+          "Content-Type": cached.mime,
+        });
+        return fileStream.pipe(res);
+      } else {
+        res.writeHead(200, {
+          "Content-Length": stat.size,
+          "Accept-Ranges": "bytes",
+          "Content-Type": cached.mime,
+        });
+        return fs.createReadStream(cached.path).pipe(res);
       }
     } catch (e) {
       console.error("Error reading cache:", e);
     }
   }
 
-  // Not cached yet: Stream via yt-dlp through Tor proxy
-  res.setHeader("Content-Type", "audio/webm");
-  res.setHeader("Accept-Ranges", "bytes");
-
-  const tempFile = path.join(CACHE_DIR, `${id}.tmp`);
-  const fileWriteStream = fs.createWriteStream(tempFile);
-
-  const proc = spawn("yt-dlp", [
-    "--proxy", "socks5://127.0.0.1:9050",
-    "-f", "ba/b",
-    "-o", "-",
-    `https://www.youtube.com/watch?v=${id}`
-  ]);
-
-  let isClientClosed = false;
-  req.on("close", () => {
-    isClientClosed = true;
-    if (!res.writableEnded) {
-      try { res.end(); } catch {}
+  // Stream via active download task and simultaneously write to disk
+  const task = ensureTrackDownload(id);
+  if (task) {
+    task.addListener(res);
+  } else {
+    const cachedAgain = getCachedFilePath(id);
+    if (cachedAgain) {
+      return fs.createReadStream(cachedAgain.path).pipe(res);
     }
-  });
-
-  proc.stdout.on("data", (chunk) => {
-    if (!isClientClosed) {
-      res.write(chunk);
-    }
-    fileWriteStream.write(chunk);
-  });
-
-  proc.stdout.on("end", () => {
-    fileWriteStream.end();
-    if (!isClientClosed && !res.writableEnded) {
-      res.end();
-    }
-  });
-
-  fileWriteStream.on("finish", () => {
-    try {
-      if (fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
-        fs.renameSync(tempFile, cachedFile);
-        console.log(`[Cache] Successfully cached track: ${id}`);
-      }
-    } catch (e) {
-      console.error("Failed to rename temp file to cache:", e);
-    }
-  });
-
-  proc.on("error", (err) => {
-    console.error("yt-dlp spawn error:", err);
-    if (!res.headersSent) res.status(500).json({ error: "Stream error" });
-    try { fs.unlinkSync(tempFile); } catch {}
-  });
+    res.status(500).json({ error: "Download initialization failed" });
+  }
 });
 
 // 8. Synced Lyrics (via LRCLIB with fallback)
@@ -464,13 +549,14 @@ app.all("/v1/auth/register", (req, res) => {
 app.get(["/v1/me", "/v1/users/me"], (req, res) => {
   res.json({ id: "self_user", username: "selfhost", displayName: "Oracle Cloud User" });
 });
-app.get("/v1/me/playlists", (req, res) => res.json({ items: [] }));
-app.get("/v1/me/library/tracks", (req, res) => res.json({ items: [] }));
-app.get("/v1/me/history", (req, res) => res.json({ items: [] }));
-app.get("/v1/me/recommendations/daily-mixes", (req, res) => res.json({ items: [] }));
-app.get("/v1/me/recommendations/wave", (req, res) => res.json({ tracks: [] }));
-app.get("/v1/me/recommendations/taste", (req, res) => res.json({ topGenres: [], topArtists: [] }));
+app.all("/v1/me/playlists", (req, res) => res.json({ items: [], total: 0 }));
+app.all(["/v1/me/library/*", "/v1/me/library"], (req, res) => res.json({ items: [], total: 0 }));
+app.all("/v1/me/history", (req, res) => res.json({ items: [], total: 0 }));
+app.all("/v1/me/recommendations/daily-mixes", (req, res) => res.json({ items: [] }));
+app.all("/v1/me/recommendations/wave", (req, res) => res.json({ tracks: [] }));
+app.all("/v1/me/recommendations/taste", (req, res) => res.json({ topGenres: [], topArtists: [] }));
 app.all("/v1/me/playback/events", (req, res) => res.json({ ok: true }));
+app.all("/v1/me/*", (req, res) => res.json({ items: [], total: 0, ok: true }));
 app.get("/v1/leaderboards/*", (req, res) => res.json({ items: [], period: "monthly" }));
 
 function getFallbackPopular() {
