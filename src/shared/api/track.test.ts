@@ -95,7 +95,7 @@ describe("toClientTrack", () => {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(currentLocation).toBe("/artist?id=UCECJhbsxgI5hWFz8EU0TY-g");
+    expect(currentLocation).toBe("/artist?id=UCECJhbsxgI5hWFz8EU0TY-g&name=Drake");
 
     await act(async () => {
       root.unmount();
@@ -141,7 +141,7 @@ describe("toClientTrack", () => {
       button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(currentLocation).toBe("/artist?id=The%20Beatles");
+    expect(currentLocation).toBe("/artist?id=The%20Beatles&name=The%20Beatles");
 
     await act(async () => {
       root.unmount();

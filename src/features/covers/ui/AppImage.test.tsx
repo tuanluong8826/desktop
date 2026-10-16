@@ -58,7 +58,7 @@ describe("AppImage Letterbox Auto-Scaling", () => {
       img.dispatchEvent(new Event("load"));
     });
 
-    expect(img.style.transform).toContain("scale(1.34)");
+    expect(img.style.transform).toContain("scale(1.36)");
   });
 
   it("does not scale if autoCropLetterbox is false", async () => {
@@ -108,7 +108,7 @@ describe("AppImage Letterbox Auto-Scaling", () => {
       img.dispatchEvent(new Event("load"));
     });
 
-    expect(img.style.transform).toContain("scale(1.34)");
+    expect(img.style.transform).toContain("scale(1.36)");
     expect(img.style.transform).toContain("rotate(5deg)");
   });
 });

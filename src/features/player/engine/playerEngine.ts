@@ -32,7 +32,7 @@ import { showToast } from "@/shared/ui";
 import { createTranslatorSync, getStoredLocale } from "@/languages";
 import type { Track } from "@/shared/types";
 
-const MAX_CONSECUTIVE_AUTO_SKIPS = 3;
+const MAX_CONSECUTIVE_AUTO_SKIPS = 5;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export { usePlayerStore, type PlayerStatus, type RepeatMode, type PlayerState };

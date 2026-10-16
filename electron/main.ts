@@ -1015,33 +1015,60 @@ if (!gotTheLock) {
       };
     });
 
-    ipcMain.handle("audio:resolve-stream", async (_event, trackId: string) => {
+    ipcMain.handle("audio:resolve-stream", async (_event, trackId: string, metadata?: { title?: string; artists?: string }) => {
       if (!trackId || typeof trackId !== "string") return null;
-      const userBin = path.join(app.getPath("userData"), "bin", "yt-dlp");
+
+      // Locate yt-dlp binary across packaged and unpackaged environments
+      const candidatePaths = [
+        path.join(process.resourcesPath, "bin", "yt-dlp"),
+        path.join(process.resourcesPath, "app.asar.unpacked", "bin", "yt-dlp"),
+        path.join(app.getPath("userData"), "bin", "yt-dlp"),
+        path.join(app.getAppPath(), "bin", "yt-dlp"),
+        path.join(__dirname, "..", "bin", "yt-dlp"),
+        path.join(process.cwd(), "bin", "yt-dlp"),
+        "/tmp/yt-dlp",
+        "/opt/homebrew/bin/yt-dlp",
+        "/usr/local/bin/yt-dlp",
+        "yt-dlp",
+      ];
+
       let binary = "yt-dlp";
-      if (fs.existsSync(userBin)) {
-        binary = userBin;
-      } else if (fs.existsSync("/tmp/yt-dlp")) {
+      for (const p of candidatePaths) {
+        if (p === "yt-dlp") {
+          binary = "yt-dlp";
+          break;
+        }
+        if (fs.existsSync(p)) {
+          try {
+            fs.chmodSync(p, 0o755);
+          } catch {}
+          binary = p;
+          break;
+        }
+      }
+
+      // Ensure persistent copy in userData/bin/yt-dlp for reliability
+      const userBin = path.join(app.getPath("userData"), "bin", "yt-dlp");
+      if (!fs.existsSync(userBin) && binary !== "yt-dlp" && fs.existsSync(binary)) {
         try {
           const dir = path.dirname(userBin);
           if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          fs.copyFileSync("/tmp/yt-dlp", userBin);
+          fs.copyFileSync(binary, userBin);
           fs.chmodSync(userBin, 0o755);
-          binary = userBin;
-        } catch {
-          binary = "/tmp/yt-dlp";
-        }
+        } catch {}
       }
 
       // Find compatible Python 3.10+ (macOS Xcode default is 3.9 which is unsupported by yt-dlp)
       let pythonExecutable: string | null = null;
       for (const p of [
         "/opt/homebrew/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/python3",
+        "/Library/Frameworks/Python.framework/Versions/3.10/bin/python3",
         "/usr/local/bin/python3",
-        "/opt/homebrew/bin/python3.13",
-        "/opt/homebrew/bin/python3.12",
-        "/opt/homebrew/bin/python3.11",
-        "/opt/homebrew/bin/python3.10",
+        "/usr/bin/python3",
       ]) {
         if (fs.existsSync(p)) {
           pythonExecutable = p;
@@ -1061,64 +1088,97 @@ if (!gotTheLock) {
       ];
       const envPath = `${commonPaths.join(":")}:${process.env.PATH || ""}`;
 
-      return new Promise<{ streamUrl: string; mimeType: string; codec: string } | null>((resolve) => {
-        try {
-          const baseArgs = [
-            "--no-playlist",
-            "--no-warnings",
-            "-f", "140/ba/bestaudio",
-            "-g",
-            `https://www.youtube.com/watch?v=${trackId}`
-          ];
+      const runYtDlp = (target: string, timeoutMs = 12000): Promise<{ streamUrl: string; mimeType: string; codec: string } | null> => {
+        return new Promise((resolve) => {
+          try {
+            const baseArgs = [
+              "--no-playlist",
+              "--no-warnings",
+              "--no-check-certificates",
+              "--prefer-free-formats",
+              "-f", "140/ba/bestaudio",
+              "-g",
+              target,
+            ];
 
-          const execCmd = pythonExecutable || binary;
-          const execArgs = pythonExecutable ? [binary, ...baseArgs] : baseArgs;
+            const execCmd = pythonExecutable || binary;
+            const execArgs = pythonExecutable && binary !== "yt-dlp" ? [binary, ...baseArgs] : baseArgs;
 
-          const proc = spawn(execCmd, execArgs, {
-            env: {
-              ...process.env,
-              PATH: envPath,
-            },
-          });
-          let stdout = "";
-          let stderr = "";
-          const timer = setTimeout(() => {
-            try { proc.kill("SIGKILL"); } catch {}
-            console.error("[audio:resolve-stream] timed out for", trackId);
-            resolve(null);
-          }, 10000);
+            const proc = spawn(execCmd, execArgs, {
+              env: {
+                ...process.env,
+                PATH: envPath,
+              },
+            });
 
-          proc.stdout.on("data", (data) => {
-            stdout += data.toString();
-          });
-          proc.stderr.on("data", (data) => {
-            stderr += data.toString();
-          });
-          proc.on("close", (code) => {
-            clearTimeout(timer);
-            const lines = stdout.trim().split("\n");
-            const url = lines.find((l) => l.trim().startsWith("http"))?.trim();
-            if (code === 0 && url) {
-              console.log("[audio:resolve-stream] resolved", trackId, "in under 10s");
-              resolve({
-                streamUrl: url,
-                mimeType: "audio/mp4",
-                codec: "aac"
-              });
-            } else {
-              console.error("[audio:resolve-stream] failed for", trackId, "exit code:", code, "stdout:", stdout.slice(0, 100), "stderr:", stderr.slice(0, 100));
+            let stdout = "";
+            let stderr = "";
+            const timer = setTimeout(() => {
+              try { proc.kill("SIGKILL"); } catch {}
+              console.error("[audio:resolve-stream] timeout after", timeoutMs, "ms for target:", target);
               resolve(null);
-            }
-          });
-          proc.on("error", (err) => {
-            clearTimeout(timer);
-            console.error("[audio:resolve-stream] spawn error:", err);
+            }, timeoutMs);
+
+            proc.stdout.on("data", (data) => {
+              stdout += data.toString();
+            });
+            proc.stderr.on("data", (data) => {
+              stderr += data.toString();
+            });
+            proc.on("close", (code) => {
+              clearTimeout(timer);
+              const lines = stdout.trim().split("\n");
+              const url = lines.find((l) => l.trim().startsWith("http"))?.trim();
+              if (code === 0 && url) {
+                const isWebm = url.includes("mime=audio%2Fwebm") || url.includes("webm");
+                resolve({
+                  streamUrl: url,
+                  mimeType: isWebm ? "audio/webm" : "audio/mp4",
+                  codec: isWebm ? "opus" : "aac",
+                });
+              } else {
+                console.warn("[audio:resolve-stream] target failed:", target, "code:", code, "stderr:", stderr.slice(0, 150));
+                resolve(null);
+              }
+            });
+            proc.on("error", (err) => {
+              clearTimeout(timer);
+              console.error("[audio:resolve-stream] spawn error for target:", target, err);
+              resolve(null);
+            });
+          } catch (err) {
+            console.error("[audio:resolve-stream] catch error:", err);
             resolve(null);
-          });
-        } catch {
-          resolve(null);
+          }
+        });
+      };
+
+      // 1. If clean 11-char YouTube ID, try direct URL first
+      const isCleanId = /^[a-zA-Z0-9_-]{11}$/.test(trackId);
+      if (isCleanId) {
+        const directRes = await runYtDlp(`https://www.youtube.com/watch?v=${trackId}`, 10000);
+        if (directRes) {
+          console.log("[audio:resolve-stream] resolved direct id", trackId);
+          return directRes;
         }
-      });
+      }
+
+      // 2. If not a clean ID (e.g. itunes_song_*) or direct ID extraction failed, search via metadata
+      const artist = metadata?.artists?.trim() || "";
+      const title = metadata?.title?.trim() || "";
+      const query = (artist && title ? `${artist} ${title}` : title || trackId.replace(/^itunes_song_/, "")).trim();
+
+      if (query) {
+        console.log(`[audio:resolve-stream] searching YouTube for: "${query}" (trackId: ${trackId})`);
+        const searchRes = await runYtDlp(`ytsearch1:${query}`, 12000);
+        if (searchRes) {
+          console.log(`[audio:resolve-stream] resolved query "${query}" for ${trackId}`);
+          return searchRes;
+        }
+      }
+
+      console.error("[audio:resolve-stream] could not resolve stream for trackId:", trackId, metadata);
+      return null;
     });
 
     // automatic update check after window initialization (packaged app only)

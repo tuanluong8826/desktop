@@ -122,7 +122,7 @@ export interface LinerElectronApi {
   onOverlayVisibility: (cb: (visible: boolean) => void) => () => void;
   setDiscordActivity: (activity: any) => Promise<boolean>;
   setDiscordRpcEnabled: (enabled: boolean) => Promise<boolean>;
-  resolveStream: (trackId: string) => Promise<{ streamUrl: string; mimeType: string; codec: string } | null>;
+  resolveStream: (trackId: string, metadata?: { title?: string; artists?: string }) => Promise<{ streamUrl: string; mimeType: string; codec: string } | null>;
 }
 
 const isHyprland = Boolean(
@@ -307,7 +307,7 @@ const api: LinerElectronApi = {
   },
   setDiscordActivity: (activity: any) => ipcRenderer.invoke("discord:set-activity", activity),
   setDiscordRpcEnabled: (enabled: boolean) => ipcRenderer.invoke("discord:set-enabled", enabled),
-  resolveStream: (trackId: string) => ipcRenderer.invoke("audio:resolve-stream", trackId),
+  resolveStream: (trackId: string, metadata?: { title?: string; artists?: string }) => ipcRenderer.invoke("audio:resolve-stream", trackId, metadata),
 };
 
 contextBridge.exposeInMainWorld("linerElectron", api);
